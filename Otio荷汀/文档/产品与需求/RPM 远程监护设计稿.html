@@ -1,0 +1,1375 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>RPM 远程监护设计稿 (Copy)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+/* Layout: sticky top bar with three views (spec document / clinic web portal in a desktop frame / patient app in a phone frame). Clinical teal on cool grey-green neutrals; semantic red/amber/green reserved for alert state. */
+:root{
+  --bg:#F1F4F3; --surface:#FFFFFF; --surface2:#E8EEEC; --fg:#14201E; --muted:#596966; --line:#D3DCD9;
+  --accent:#0B6E69; --accent-ink:#FFFFFF; --accent-soft:#D6EBE8;
+  --crit:#B83227; --crit-soft:#F8E1DE; --warn:#9A6411; --warn-soft:#F7EBD3; --ok:#2B7A4B; --ok-soft:#DDF0E3; --info:#35589C; --info-soft:#E0E8F7;
+  --sys:#B83227; --dia:#35589C; --cgm:#0B6E69; --band:rgba(43,122,75,.12);
+  --ecg-bg:#FFF6F5; --ecg-minor:#F6D3D0; --ecg-major:#EBA9A3; --ecg-line:#1D1D1D;
+  --phone:#0E1413; --shadow:0 1px 2px rgba(20,32,30,.06),0 8px 24px rgba(20,32,30,.07);
+  --f-sans:"IBM Plex Sans","Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1514; --surface:#162120; --surface2:#1D2A28; --fg:#E2EBE9; --muted:#93A6A2; --line:#2B3B38;
+  --accent:#4FB5AC; --accent-ink:#06201E; --accent-soft:#1A3533;
+  --crit:#E8705F; --crit-soft:#3A1F1C; --warn:#E0AA4E; --warn-soft:#352A16; --ok:#62C08A; --ok-soft:#173022; --info:#86A3E3; --info-soft:#1C2740;
+  --sys:#E8705F; --dia:#86A3E3; --cgm:#4FB5AC; --band:rgba(98,192,138,.13);
+  --ecg-bg:#1B1716; --ecg-minor:#3A2725; --ecg-major:#5A3532; --ecg-line:#F1E6E4;
+  --phone:#000; --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.3); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1514; --surface:#162120; --surface2:#1D2A28; --fg:#E2EBE9; --muted:#93A6A2; --line:#2B3B38;
+  --accent:#4FB5AC; --accent-ink:#06201E; --accent-soft:#1A3533;
+  --crit:#E8705F; --crit-soft:#3A1F1C; --warn:#E0AA4E; --warn-soft:#352A16; --ok:#62C08A; --ok-soft:#173022; --info:#86A3E3; --info-soft:#1C2740;
+  --sys:#E8705F; --dia:#86A3E3; --cgm:#4FB5AC; --band:rgba(98,192,138,.13);
+  --ecg-bg:#1B1716; --ecg-minor:#3A2725; --ecg-major:#5A3532; --ecg-line:#F1E6E4;
+  --phone:#000; --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.3); color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-sans);font-size:14px;line-height:1.5}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[data-act]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+h1,h2,h3{text-wrap:balance;margin:0}
+.wrap{padding-inline:16px;padding-block:20px 48px;max-width:1280px;margin:0 auto}
+
+/* top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+.top-in{max-width:1280px;margin:0 auto;padding-inline:16px;padding-block:10px;display:flex;gap:12px 20px;align-items:center;flex-wrap:wrap}
+.brand{display:flex;gap:10px;align-items:center;margin-right:auto;min-width:0}
+.mark{width:30px;height:30px;border-radius:8px;background:var(--accent);display:grid;place-items:center;flex:none}
+.mark svg{width:18px;height:18px}
+.brand b{display:block;font-size:15px}
+.brand small{display:block;color:var(--muted);font-size:12px}
+.seg{display:inline-flex;background:var(--surface2);border-radius:9px;padding:3px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:transparent;padding:6px 12px;border-radius:7px;font-size:13px;color:var(--muted);white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--fg);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.example{display:inline-block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--warn);background:var(--warn-soft);padding:2px 8px;border-radius:99px}
+
+/* chips */
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:1px 8px;border-radius:99px;background:var(--surface2);color:var(--muted);white-space:nowrap}
+.chip.crit{background:var(--crit-soft);color:var(--crit)} .chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.ok{background:var(--ok-soft);color:var(--ok)} .chip.info{background:var(--info-soft);color:var(--info)} .chip.acc{background:var(--accent-soft);color:var(--accent)}
+.dotc{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+
+/* spec */
+.spec{display:grid;grid-template-columns:200px minmax(0,1fr);gap:32px}
+.toc{position:sticky;top:76px;align-self:start;display:flex;flex-direction:column;gap:2px;font-size:13px}
+.toc a{color:var(--muted);text-decoration:none;padding:5px 10px;border-radius:6px}
+.toc a:hover{background:var(--surface2);color:var(--fg)}
+.doc{min-width:0;display:flex;flex-direction:column;gap:36px}
+.doc section{display:flex;flex-direction:column;gap:12px;scroll-margin-top:80px}
+.doc h1{font-size:28px;line-height:1.25}
+.doc h2{font-size:20px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.doc h3{font-size:15px}
+.doc p{margin:0;max-width:72ch;color:var(--fg)}
+.lede{color:var(--muted);font-size:15px}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;color:var(--muted);font-weight:500;background:var(--surface2);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.tag-new{color:var(--accent);font-weight:600}
+.tag-ref{color:var(--muted)}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;counter-reset:s;padding:0;margin:0;list-style:none}
+.steps li{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;counter-increment:s;display:flex;flex-direction:column;gap:4px}
+.steps li::before{content:counter(s);font-family:var(--f-mono);font-size:12px;color:var(--accent)}
+.steps b{font-size:14px} .steps span{font-size:12.5px;color:var(--muted)}
+.arch{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:stretch}
+.arch .col{display:flex;flex-direction:column;gap:8px}
+.arch .lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px}
+.box b{display:block;font-size:13.5px}
+.box small{color:var(--muted);font-size:12px;display:block}
+.box.hl{border-color:var(--accent);background:var(--accent-soft)}
+.flow-note{font-size:12.5px;color:var(--muted)}
+code{font-family:var(--f-mono);font-size:.92em;background:var(--surface2);padding:1px 5px;border-radius:4px}
+.orgsw{display:grid;grid-template-columns:repeat(2,1fr);gap:2px;background:var(--surface2);border-radius:9px;padding:3px;margin:0 2px 12px}
+.orgsw button{border:0;background:transparent;padding:6px 2px;border-radius:7px;font-size:11.5px;color:var(--muted);white-space:nowrap}
+.orgsw button[aria-pressed="true"]{background:var(--surface);color:var(--fg);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.sw{width:34px;height:20px;border-radius:99px;background:var(--line);position:relative;display:inline-block;flex:none;vertical-align:middle}.sw::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s}.sw.on{background:var(--accent)}.sw.on::after{left:16px}
+.perm td{text-align:center}.perm td:first-child{text-align:left}
+.qrow{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}.qrow .h{color:var(--muted);cursor:grab;font-family:var(--f-mono)}
+.hbar{height:8px;border-radius:4px;background:var(--surface2);overflow:hidden}.hbar i{display:block;height:100%;background:var(--accent);border-radius:4px}.hrow{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,2fr) 64px;gap:10px;align-items:center;font-size:13px;padding:5px 0}
+.plans{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.plan{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.plan .pr{font-family:var(--f-mono);font-size:20px;font-weight:600}.plan .pr small{font-size:12px;color:var(--muted);font-weight:400}
+.plan ul{margin:0;padding-left:16px;font-size:12.5px;color:var(--muted)}
+.split{display:flex;flex-direction:column;gap:4px;font-size:13px}.split div{display:flex;justify-content:space-between;gap:10px}.split div.tot{border-top:1px solid var(--line);padding-top:6px;font-weight:600}
+.stepper{display:flex;gap:4px}.stepper i{flex:1;height:5px;border-radius:3px;background:var(--surface2)}.stepper i.on{background:var(--accent)}
+.callout{border-left:3px solid var(--accent);background:var(--surface);padding:12px 14px;border-radius:0 10px 10px 0;max-width:80ch}
+.qlist{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;max-width:80ch}
+.states{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px}
+.states .arrow{color:var(--muted)}
+
+/* clinic frame */
+.frame{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.frame-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--surface2);font-size:12px;color:var(--muted)}
+.frame-bar i{width:10px;height:10px;border-radius:50%;background:var(--line);display:inline-block}
+.frame-bar .url{margin-left:8px;background:var(--surface);padding:2px 10px;border-radius:6px;font-family:var(--f-mono);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.portal{display:grid;grid-template-columns:200px minmax(0,1fr);min-height:640px}
+.side{border-right:1px solid var(--line);padding:14px 10px;display:flex;flex-direction:column;gap:2px;background:var(--surface)}
+.side .org{padding:4px 10px 14px;font-size:12px;color:var(--muted)}
+.side .org b{display:block;color:var(--fg);font-size:14px}
+.nav{display:flex;align-items:center;gap:10px;border:0;background:transparent;text-align:left;padding:8px 10px;border-radius:8px;color:var(--muted);font-size:13.5px;white-space:nowrap}
+.nav:hover{background:var(--surface2);color:var(--fg)}
+.nav[aria-current="page"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.nav .cnt{margin-left:auto;font-size:11px;background:var(--crit);color:#fff;border-radius:99px;padding:0 6px;font-family:var(--f-mono)}
+.nav svg{width:16px;height:16px;flex:none}
+.pmain{padding:20px;display:flex;flex-direction:column;gap:16px;min-width:0;background:var(--bg)}
+.phead{display:flex;align-items:center;gap:10px 16px;flex-wrap:wrap}
+.phead h2{font-size:19px;margin-right:auto}
+.btn{border:1px solid var(--line);background:var(--surface);padding:6px 12px;border-radius:8px;font-size:13px;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.sm{padding:3px 9px;font-size:12px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.kpi small{color:var(--muted);font-size:12px;display:block}
+.kpi .v{font-size:26px;font-weight:600;font-family:var(--f-mono);font-variant-numeric:tabular-nums;line-height:1.2}
+.kpi .d{font-size:12px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;min-width:0}
+.panel-h{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.panel-h h3{font-size:14px;margin-right:auto}
+.panel-b{padding:12px 14px}
+.panel .tbl-wrap{border:0;border-radius:0 0 10px 10px}
+tr.click{cursor:pointer} tr.click:hover td{background:var(--surface2)}
+.sev{display:inline-block;width:4px;height:28px;border-radius:2px;vertical-align:middle;margin-right:8px}
+.sev.crit{background:var(--crit)} .sev.warn{background:var(--warn)} .sev.info{background:var(--info)}
+.pname{font-weight:600}
+.sub{color:var(--muted);font-size:12px}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.input{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 10px;font:inherit;font-size:13px;color:var(--fg);min-width:0}
+.bar{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;width:70px;display:inline-block;vertical-align:middle;margin-right:6px}
+.bar i{display:block;height:100%;background:var(--accent)}
+.ptitle{display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px}
+.avatar{width:44px;height:44px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:700;flex:none}
+.ptitle .meta{display:flex;flex-direction:column;gap:3px;margin-right:auto;min-width:0}
+.ptitle .meta b{font-size:17px}
+.ptabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.ptabs button{border:0;background:transparent;padding:8px 12px;border-bottom:2px solid transparent;color:var(--muted);white-space:nowrap}
+.ptabs button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+.vitals{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.vital{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.vital small{color:var(--muted);font-size:12px}
+.vital .v{font-family:var(--f-mono);font-size:20px;font-weight:500}
+.vital .v u{text-decoration:none;font-size:11px;color:var(--muted);margin-left:3px}
+.vital .src{font-size:11px;color:var(--muted)}
+.chart{width:100%;height:auto;display:block}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .tick{fill:var(--muted);font-size:10px;font-family:var(--f-mono)}
+.chart .band{fill:var(--band)}
+.chart .ln{stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.chart .ln.sys{stroke:var(--sys)} .chart .ln.dia{stroke:var(--dia)} .chart .ln.cgm{stroke:var(--cgm)} .chart .ln.hr{stroke:var(--info)}
+.chart .dot.sys,.chart .end.sys{fill:var(--sys)} .chart .dot.dia,.chart .end.dia{fill:var(--dia)} .chart .end.cgm{fill:var(--cgm)} .chart .end.hr{fill:var(--info)}
+.chart .end{stroke:var(--surface);stroke-width:2}
+.chart .ref{stroke-dasharray:4 4;stroke-width:1}
+.chart .ref.crit{stroke:var(--crit)} .chart .ref.warn{stroke:var(--warn)}
+.chart .lbl{font-size:10px;font-family:var(--f-mono)}
+.chart .lbl.crit{fill:var(--crit)} .chart .lbl.warn{fill:var(--warn)}
+.legend{display:flex;gap:12px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:3px;border-radius:2px;vertical-align:middle;margin-right:4px}
+.tir{display:flex;height:16px;border-radius:4px;overflow:hidden}
+.tir i{display:block;height:100%}
+.tir-l{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;font-size:11px;color:var(--muted);margin-top:6px}
+.tir-l b{display:block;font-family:var(--f-mono);font-size:13px;color:var(--fg)}
+.ecg{border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+.timeline{display:flex;flex-direction:column;gap:0;margin:0;padding:0;list-style:none}
+.timeline li{display:grid;grid-template-columns:96px 14px minmax(0,1fr);gap:10px;padding-bottom:14px}
+.timeline .t{font-size:12px;color:var(--muted);text-align:right}
+.timeline .rail{position:relative}
+.timeline .rail::before{content:"";position:absolute;left:6px;top:4px;bottom:-14px;width:2px;background:var(--line)}
+.timeline li:last-child .rail::before{display:none}
+.timeline .rail::after{content:"";position:absolute;left:2px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--surface);border:2px solid var(--accent)}
+.timeline .c{display:flex;flex-direction:column;gap:3px}
+.kanban{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kcol{background:var(--surface2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.kcol h4{margin:0;font-size:13px;display:flex;gap:6px;align-items:center}
+.kcol h4 .num{color:var(--muted);font-weight:400}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:5px;text-align:left;width:100%}
+.card:hover{border-color:var(--accent)}
+.card .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.card .who{font-weight:600;margin-right:auto}
+.tpl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.tpl .panel-b{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.tpl ol{margin:0;padding-left:18px;color:var(--muted);font-size:12.5px}
+
+/* modal + toast */
+.scrim{position:fixed;inset:0;background:rgba(10,16,15,.45);z-index:50;display:grid;place-items:center;padding:16px}
+.modal{background:var(--surface);border-radius:14px;width:min(640px,100%);max-height:calc(100% - 32px);overflow:auto;box-shadow:var(--shadow)}
+.modal .mh{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.modal .mh h3{margin-right:auto;font-size:16px}
+.modal .mb{padding:16px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
+.modal .mf{padding:12px 18px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px}
+.field{display:flex;flex-direction:column;gap:5px;font-size:13px;min-width:0}
+.field.full{grid-column:1/-1}
+.field>span{color:var(--muted);font-size:12px}
+.opts{display:flex;gap:6px;flex-wrap:wrap}
+.opts label{border:1px solid var(--line);border-radius:7px;padding:4px 10px;font-size:13px;display:flex;gap:5px;align-items:center;cursor:pointer}
+.opts input{accent-color:var(--accent);margin:0}
+textarea.input{resize:vertical;min-height:64px}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:60;font-size:13px;box-shadow:var(--shadow)}
+
+/* patient app */
+.appwrap{display:grid;grid-template-columns:220px auto minmax(0,1fr);gap:28px;align-items:start}
+.screens{display:flex;flex-direction:column;gap:2px}
+.screens h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:10px 10px 4px}
+.screens .nav{width:100%}
+.notes{display:flex;flex-direction:column;gap:12px;min-width:0}
+.notes .box p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.phone{width:340px;max-width:100%;height:720px;border-radius:44px;background:var(--phone);padding:10px;box-shadow:var(--shadow)}
+.phone.android{border-radius:30px}
+.scr{height:100%;border-radius:36px;overflow:hidden;background:var(--bg);display:flex;flex-direction:column;position:relative}
+.phone.android .scr{border-radius:22px}
+.sb{display:flex;justify-content:space-between;align-items:center;padding:12px 26px 4px;font-size:12.5px;font-weight:600;height:40px;flex:none;position:relative}
+.sb .island{position:absolute;left:50%;top:9px;transform:translateX(-50%);width:92px;height:26px;border-radius:14px;background:var(--phone)}
+.sb .punch{position:absolute;left:50%;top:11px;transform:translateX(-50%);width:12px;height:12px;border-radius:50%;background:var(--phone)}
+.phone.android .sb{padding:10px 20px 4px;font-weight:500;font-size:12px}
+.sb .ic{display:flex;gap:4px;align-items:center}
+.sb .ic i{display:inline-block;width:16px;height:9px;border:1.5px solid currentColor;border-radius:3px;position:relative}
+.sb .ic i::after{content:"";position:absolute;inset:1px;right:4px;background:currentColor;border-radius:1px}
+.ahead{padding:4px 18px 10px;flex:none;display:flex;align-items:center;gap:8px}
+.ahead h2{font-size:26px;letter-spacing:-.01em}
+.phone.android .ahead h2{font-size:20px;font-weight:500}
+.ahead .back{border:0;background:transparent;color:var(--accent);padding:0;font-size:15px}
+.ahead.small h2{font-size:17px;font-weight:600;flex:1}
+.phone.ios .ahead.small h2{text-align:center;margin-right:40px}
+.abody{flex:1;overflow-y:auto;padding:0 14px 16px;display:flex;flex-direction:column;gap:12px}
+.acard{background:var(--surface);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.phone.android .acard{border-radius:16px;background:var(--surface2)}
+.acard h4{margin:0;font-size:13px;color:var(--muted);font-weight:500;display:flex;align-items:center;gap:6px}
+.acard h4 .more{margin-left:auto;color:var(--accent);border:0;background:transparent;font-size:12.5px;padding:0}
+.task{display:flex;gap:10px;align-items:center;font-size:13.5px}
+.task .ck{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);flex:none;display:grid;place-items:center}
+.task.done .ck{background:var(--ok);border-color:var(--ok)}
+.task.done .ck::after{content:"";width:8px;height:4px;border:2px solid #fff;border-top:0;border-right:0;transform:rotate(-45deg) translate(1px,-1px)}
+.task.done .tx{color:var(--muted);text-decoration:line-through}
+.task .tm{margin-left:auto;font-size:12px;color:var(--muted);font-family:var(--f-mono)}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.m{background:var(--surface);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:1px;border:0;text-align:left}
+.phone.android .m{background:var(--surface2)}
+.m small{font-size:11.5px;color:var(--muted)}
+.m .v{font-family:var(--f-mono);font-size:19px;font-weight:500}
+.m .v u{text-decoration:none;font-size:10.5px;color:var(--muted);margin-left:2px}
+.m .s{font-size:11px}
+.s.crit{color:var(--crit)} .s.ok{color:var(--ok)} .s.warn{color:var(--warn)} .s.mu{color:var(--muted)}
+.tabbar{flex:none;display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--line);background:var(--surface);padding:6px 4px calc(16px);}
+.tabbar button{border:0;background:transparent;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10.5px;color:var(--muted);padding:2px 0}
+.tabbar svg{width:22px;height:22px}
+.tabbar button[aria-current="page"]{color:var(--accent)}
+.phone.android .tabbar{border-top:0;background:var(--surface2);padding:10px 4px 18px}
+.phone.android .tabbar button{font-size:11px;gap:4px}
+.phone.android .tabbar .pill{width:56px;height:30px;border-radius:16px;display:grid;place-items:center}
+.phone.android .tabbar button[aria-current="page"]{color:var(--fg);font-weight:600}
+.phone.android .tabbar button[aria-current="page"] .pill{background:var(--accent-soft);color:var(--accent)}
+.phone.ios .tabbar .pill{display:contents}
+.abtn{border:0;background:var(--accent);color:var(--accent-ink);border-radius:12px;padding:12px;font-weight:600;font-size:14.5px;width:100%}
+.phone.android .abtn{border-radius:99px}
+.abtn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.list{background:var(--surface);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.phone.android .list{background:var(--surface2);border-radius:16px}
+.li{display:flex;gap:12px;align-items:center;padding:11px 14px;border:0;background:transparent;text-align:left;width:100%;border-bottom:1px solid var(--line);font-size:14px}
+.li:last-child{border-bottom:0}
+.li .ico{width:34px;height:34px;border-radius:9px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;flex:none}
+.li .ico svg{width:18px;height:18px}
+.li .tx{flex:1;min-width:0;display:flex;flex-direction:column}
+.li .tx small{color:var(--muted);font-size:12px}
+.li .chev{color:var(--muted)}
+.aseg{display:flex;background:var(--surface2);border-radius:9px;padding:2px;gap:2px}
+.aseg button{flex:1;border:0;background:transparent;padding:6px 0;font-size:12.5px;border-radius:7px;color:var(--muted)}
+.aseg button[aria-pressed="true"]{background:var(--surface);color:var(--fg);font-weight:600}
+.scan{display:grid;place-items:center;padding:20px 0}
+.scan .ring{width:110px;height:110px;border-radius:50%;border:2px solid var(--accent);display:grid;place-items:center;position:relative}
+.scan .ring::before{content:"";position:absolute;inset:-14px;border-radius:50%;border:2px solid var(--accent);opacity:.35;animation:pulse 1.6s ease-out infinite}
+@keyframes pulse{from{transform:scale(.85);opacity:.5}to{transform:scale(1.15);opacity:0}}
+@media (prefers-reduced-motion:reduce){.scan .ring::before{animation:none}}
+.perm{font-size:12px;color:var(--muted);background:var(--surface);border-radius:10px;padding:10px 12px}
+.bubble{max-width:82%;padding:9px 12px;border-radius:14px;font-size:13.5px;background:var(--surface)}
+.bubble.me{align-self:flex-end;background:var(--accent);color:var(--accent-ink)}
+.bubble small{display:block;font-size:11px;opacity:.75;margin-top:3px}
+.chatin{flex:none;display:flex;gap:8px;padding:8px 12px 14px;background:var(--surface);border-top:1px solid var(--line)}
+.chatin .input{flex:1;border-radius:99px}
+.q{display:flex;flex-direction:column;gap:6px;font-size:14px}
+.q .opts label{background:var(--surface)}
+
+@media (max-width:1100px){
+  .appwrap{grid-template-columns:auto minmax(0,1fr)}
+  .screens{grid-column:1/-1;flex-direction:row;flex-wrap:wrap}
+  .screens h3{width:100%;margin:6px 0 0}
+  .screens .nav{width:auto}
+  .vitals{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .tpl{grid-template-columns:1fr 1fr}
+}
+@media (max-width:860px){
+  .spec{grid-template-columns:1fr}
+  .toc{position:static;flex-direction:row;flex-wrap:wrap}
+  .arch{grid-template-columns:1fr 1fr}
+  .portal{grid-template-columns:1fr}
+  .side{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:8px}
+  .side .org,.orgsw{display:none}
+  .kpis{grid-template-columns:1fr 1fr}
+  .grid2{grid-template-columns:1fr}
+  .kanban{grid-template-columns:1fr 1fr}
+  .appwrap{grid-template-columns:1fr;justify-items:center}
+  .notes{width:100%}
+  .tpl{grid-template-columns:1fr}
+}
+@media (max-width:520px){
+  .arch,.kanban,.kpis{grid-template-columns:1fr}
+  .vitals{grid-template-columns:1fr 1fr}
+  .modal .mb{grid-template-columns:1fr}
+  .pmain{padding:12px}
+  .phone{height:680px}
+}
+</style>
+
+<div id="root"></div>
+
+<script>
+(function(){
+const S={st:'acct',org:'clinic',rxPlan:'combo',rxRev:'platform',tab:'spec',cv:'dash',pid:'P1024',ptab:'overview',app:'home',os:'ios',dseg:'bp',pair:0,pairType:null,cgm:0,modal:null,toast:null};
+try{const v=JSON.parse(localStorage.getItem('rpm-ui')||'{}');if(v.lang)S.lang=v.lang;if(v.tab)S.tab=v.tab;if(v.os)S.os=v.os}catch(e){}
+const save=()=>{try{localStorage.setItem('rpm-ui',JSON.stringify({lang:S.lang,tab:S.tab,os:S.os}))}catch(e){}};
+const L=(zh,en)=>S.lang==='zh'?zh:en;
+const T=a=>Array.isArray(a)?(S.lang==='zh'?a[0]:a[1]):a;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- icons ---------- */
+const I={
+ home:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
+ users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c2 .7 3.2 2.4 3.5 5.2"/>',
+ cal:'<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+ bell:'<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
+ dev:'<rect x="6" y="3" width="12" height="18" rx="2.5"/><path d="M10 18h4"/>',
+ chart:'<path d="M3 20h18"/><path d="M5 16l4-5 4 3 6-8"/>',
+ msg:'<path d="M4 5h16v11H9l-5 4z"/>',
+ me:'<circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4 4-6.5 8-6.5s7.2 2.5 8 6.5"/>',
+ heart:'<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+ bp:'<circle cx="10" cy="13" r="6"/><path d="M10 13l2.5-2.5M16 7l4-3"/>',
+ ecg:'<path d="M2 12h5l2-5 3 10 2-5h8"/>',
+ ring:'<ellipse cx="12" cy="13" rx="7" ry="6"/><path d="M9 5h6l-1 2.5h-4z"/>',
+ band:'<rect x="8" y="7" width="8" height="10" rx="2"/><path d="M9 7l1-4h4l1 4M9 17l1 4h4l1-4"/>',
+ cgm:'<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/>',
+ report:'<path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7M9 8h4"/>',
+ plus:'<path d="M12 5v14M5 12h14"/>',
+ gear:'<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M4.2 6.2l2.1 2.1M17.7 15.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 17.8l2.1-2.1M17.7 8.3l2.1-2.1"/>',
+ share:'<circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.2 10.8l7.6-3.6M8.2 13.2l7.6 3.6"/>',
+ card:'<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/>',
+ nurse:'<circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4 4-6.5 8-6.5s7.2 2.5 8 6.5"/><path d="M12 6v4M10 8h4"/>',
+ flask:'<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3"/><path d="M7.5 15h9"/>'
+};
+const ic=(n,sw=1.7)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]}</svg>`;
+
+/* ---------- sample data (fictional) ---------- */
+const P=[
+ {id:'P1024',n:['陈建国','Tan Kian Kok'],sx:['男','M'],age:67,cond:[['高血压','Hypertension'],['2 型糖尿病','T2 diabetes']],risk:'crit',dv:['bp','cgm','band'],last:['12 分钟前','12 min ago'],adh:92,next:['10月3日 · 电话','Oct 3 · Phone'],team:['李医生 / 陈护士','Dr. Li / Nurse Chen'],prog:['高血压 + CGM 管理','HTN + CGM program'],day:46},
+ {id:'P1031',n:['林秀英','Lim Siew Eng'],sx:['女','F'],age:72,cond:[['心房颤动','Atrial fibrillation']],risk:'crit',dv:['ecg','ring'],last:['1 小时前','1 hr ago'],adh:85,next:['今天 · 视频','Today · Video'],team:['周医生 / 陈护士','Dr. Zhou / Nurse Chen'],prog:['心律监测','Cardiac rhythm'],day:18},
+ {id:'P1007',n:['Rajesh Kumar','Rajesh Kumar'],sx:['男','M'],age:54,cond:[['1 型糖尿病','T1 diabetes']],risk:'warn',dv:['cgm','band'],last:['5 分钟前','5 min ago'],adh:97,next:['10月8日 · 门诊','Oct 8 · Clinic'],team:['李医生 / 何护士','Dr. Li / Nurse He'],prog:['CGM 管理','CGM program'],day:120},
+ {id:'P1045',n:['Nur Aisyah','Nur Aisyah'],sx:['女','F'],age:61,cond:[['高血压','Hypertension'],['慢性心衰','Heart failure']],risk:'warn',dv:['bp','ring'],last:['3 天前','3 days ago'],adh:41,next:['已逾期 2 天','Overdue 2 days'],team:['周医生 / 何护士','Dr. Zhou / Nurse He'],prog:['心衰出院后','HF post-discharge'],day:9},
+ {id:'P1012',n:['黄国强','Wong Kok Keong'],sx:['男','M'],age:58,cond:[['高血压','Hypertension']],risk:'ok',dv:['bp','band'],last:['今天 07:42','Today 07:42'],adh:88,next:['10月15日 · 电话','Oct 15 · Phone'],team:['李医生 / 陈护士','Dr. Li / Nurse Chen'],prog:['高血压管理','HTN program'],day:203},
+ {id:'P1050',n:['李佩珊','Lee Pei Shan'],sx:['女','F'],age:45,cond:[['妊娠期糖尿病','Gestational diabetes']],risk:'ok',dv:['cgm'],last:['20 分钟前','20 min ago'],adh:95,next:['10月6日 · 视频','Oct 6 · Video'],team:['吴医生 / 何护士','Dr. Wu / Nurse He'],prog:['CGM 管理','CGM program'],day:31},
+ {id:'P1003',n:['吴志明','Goh Chee Meng'],sx:['男','M'],age:76,cond:[['冠心病','CAD'],['睡眠呼吸暂停','Sleep apnea']],risk:'warn',dv:['ecg','ring','bp'],last:['2 小时前','2 hr ago'],adh:76,next:['今天 · 电话','Today · Phone'],team:['周医生 / 陈护士','Dr. Zhou / Nurse Chen'],prog:['心律监测','Cardiac rhythm'],day:64},
+ {id:'P1061',n:['Priya Nair','Priya Nair'],sx:['女','F'],age:39,cond:[['高血压','Hypertension']],risk:'ok',dv:['bp','band'],last:['昨天 21:10','Yesterday 21:10'],adh:90,next:['10月20日 · 问卷','Oct 20 · Survey'],team:['吴医生 / 何护士','Dr. Wu / Nurse He'],prog:['高血压管理','HTN program'],day:12}
+];
+const pById=id=>P.find(p=>p.id===id);
+const DV={bp:['血压计','BP monitor'],ecg:['心电卡','ECG card'],ring:['智能戒指','Smart ring'],band:['智能手环','Smart band'],cgm:['Sinocare CGM','Sinocare CGM']};
+const DVI={bp:'bp',ecg:'ecg',ring:'ring',band:'band',cgm:'cgm'};
+const RISK={crit:['高风险','High risk'],warn:['需关注','Watch'],ok:['平稳','Stable']};
+
+let A=[
+ {id:1,pid:'P1024',lv:'crit',t:['血压过高','High blood pressure'],v:'172/104 mmHg',src:'bp',at:['08:14','08:14'],st:'open'},
+ {id:2,pid:'P1031',lv:'warn',t:['新心电记录待医生判读','New ECG awaiting doctor review'],v:['30 秒记录 · 平均心率 96 bpm','30 s record · avg HR 96 bpm'],src:'ecg',at:['07:55','07:55'],st:'open'},
+ {id:3,pid:'P1007',lv:'crit',t:['低血糖','Low glucose'],v:'3.1 mmol/L',src:'cgm',at:['03:20','03:20'],st:'open'},
+ {id:4,pid:'P1045',lv:'warn',t:['连续 72 小时无数据','No data for 72 h'],v:'—',src:'bp',at:['昨天','Yesterday'],st:'open'},
+ {id:5,pid:'P1003',lv:'warn',t:['夜间血氧偏低','Low overnight SpO₂'],v:'SpO₂ 88%',src:'ring',at:['04:40','04:40'],st:'open'},
+ {id:6,pid:'P1003',lv:'warn',t:['静息心率偏高','High resting HR'],v:'118 bpm',src:'ring',at:['06:10','06:10'],st:'open'},
+ {id:7,pid:'P1050',lv:'info',t:['餐后血糖偏高','High post-meal glucose'],v:'11.6 mmol/L',src:'cgm',at:['昨天 13:05','Yesterday 13:05'],st:'open'}
+];
+let F=[
+ {id:'F1',pid:'P1031',how:'video',why:['告警触发','Alert-triggered'],what:['判读心电记录并视频复诊','Review ECG and video consult'],due:['今天 10:30','Today 10:30'],col:'today',owner:['周医生','Dr. Zhou']},
+ {id:'F2',pid:'P1003',how:'phone',why:['计划随访','Scheduled'],what:['月度随访：用药与症状','Monthly: meds and symptoms'],due:['今天 14:00','Today 14:00'],col:'today',owner:['陈护士','Nurse Chen']},
+ {id:'F3',pid:'P1024',how:'phone',why:['告警触发','Alert-triggered'],what:['血压升高，确认服药情况','BP up, check adherence'],due:['今天 16:00','Today 16:00'],col:'today',owner:['陈护士','Nurse Chen']},
+ {id:'F4',pid:'P1045',how:'phone',why:['出院后','Post-discharge'],what:['出院第 7 天随访','Day-7 post-discharge call'],due:['9月29日','Sep 29'],col:'over',owner:['何护士','Nurse He']},
+ {id:'F5',pid:'P1061',how:'survey',why:['计划随访','Scheduled'],what:['入组 2 周问卷','2-week enrollment survey'],due:['9月30日','Sep 30'],col:'over',owner:['何护士','Nurse He']},
+ {id:'F6',pid:'P1050',how:'video',why:['计划随访','Scheduled'],what:['传感器周期复盘 (TIR)','Sensor-cycle review (TIR)'],due:['10月6日','Oct 6'],col:'up',owner:['吴医生','Dr. Wu']},
+ {id:'F7',pid:'P1007',how:'clinic',why:['计划随访','Scheduled'],what:['季度门诊 + HbA1c','Quarterly visit + HbA1c'],due:['10月8日','Oct 8'],col:'up',owner:['李医生','Dr. Li']},
+ {id:'F8',pid:'P1012',how:'phone',why:['计划随访','Scheduled'],what:['月度电话随访','Monthly phone check'],due:['9月30日','Sep 30'],col:'done',owner:['陈护士','Nurse Chen'],res:['血压达标，继续当前方案','BP at goal, continue plan']}
+];
+const PL=[
+ {k:'bp',n:['血压管理计划','BP care plan'],pr:29,fee:[8,14],dv:['bp'],inc:[['血压计（计划期内借用）','BP monitor (on loan)'],['每周护士审阅','Weekly nurse review'],['每月医生复核 + 月报','Monthly doctor review + report']]},
+ {k:'cgm',n:['血糖 CGM 计划','Glucose CGM plan'],pr:149,fee:[18,28],dv:['cgm'],inc:[['每月 2 个 Sinocare 传感器','2 Sinocare sensors a month'],['低血糖实时告警','Real-time low-glucose alerts'],['每 15 天 TIR 复盘','TIR review every 15 days']]},
+ {k:'ecg',n:['心律监测计划','Heart rhythm plan'],pr:39,fee:[12,20],dv:['ecg'],inc:[['心电卡（计划期内借用）','ECG card (on loan)'],['每条心电由医生判读','Every ECG read by a doctor'],['月报','Monthly report']]},
+ {k:'combo',n:['血压 + 血糖组合','BP + CGM combo'],pr:169,fee:[22,36],dv:['bp','cgm'],inc:[['血压计 + 每月 2 个传感器','BP monitor + 2 sensors a month'],['护士每周审阅，医生每月复核','Weekly nurse, monthly doctor review'],['可加购手环 / 戒指','Band or ring add-on']]},
+ {k:'check',n:['14 天 CGM 代谢检查','14-day CGM metabolic check'],pr:199,once:1,fee:[0,0],dv:['cgm'],inc:[['1 个传感器，佩戴 14 天','1 sensor worn 14 days'],['饮食与血糖报告','Meal and glucose report'],['体检中心医生解读','Read by the centre’s doctor']]}
+];
+const plById=k=>PL.find(x=>x.k===k);
+const SUB=[
+ {pid:'P1024',pl:'combo',st:'ok',since:['8月17日','Aug 17'],next:['10月17日','Oct 17'],rev:'clinic'},
+ {pid:'P1031',pl:'ecg',st:'ok',since:['9月13日','Sep 13'],next:['10月13日','Oct 13'],rev:'platform'},
+ {pid:'P1007',pl:'cgm',st:'warn',since:['6月3日','Jun 3'],next:['10月3日','Oct 3'],rev:'platform',note:['已提醒，3 天后暂停服务','Reminded; pauses in 3 days']},
+ {pid:'P1045',pl:'bp',st:'ok',since:['9月22日','Sep 22'],next:['10月22日','Oct 22'],rev:'platform'},
+ {pid:'P1012',pl:'bp',st:'ok',since:['3月11日','Mar 11'],next:['10月11日','Oct 11'],rev:'clinic'},
+ {pid:'P1050',pl:'cgm',st:'ok',since:['8月31日','Aug 31'],next:['10月31日','Oct 31'],rev:'clinic'},
+ {pid:'P1061',pl:'bp',st:'info',since:['—','—'],next:['—','—'],rev:'platform',note:['链接 9月30日发出','Link sent Sep 30']}
+];
+const SUBST={ok:['生效中','Active'],warn:['扣款失败','Payment failed'],info:['待支付','Awaiting payment']};
+const REV={clinic:['本诊所护士','Clinic nurse'],platform:['平台集中护士','Central nurse team']};
+const money=n=>'S$'+n.toLocaleString('en-SG');
+const EG=()=>`<span class="example">${L('示例价格，待成本测算','Sample prices, pending costing')}</span>`;
+const HOW={phone:['电话','Phone'],video:['视频','Video'],clinic:['门诊','Clinic'],survey:['问卷','Survey']};
+const COLS=[['over',['已逾期','Overdue'],'crit'],['today',['今日','Today'],'acc'],['up',['待随访','Upcoming'],'info'],['done',['已完成','Done'],'ok']];
+
+/* ---------- charts ---------- */
+function lineChart(o){
+ const w=o.w,h=o.h,p={l:34,r:20,t:10,b:22};
+ const X=x=>p.l+(x-o.x0)/(o.x1-o.x0)*(w-p.l-p.r), Y=y=>p.t+(1-(y-o.y0)/(o.y1-o.y0))*(h-p.t-p.b);
+ let s=`<svg viewBox="0 0 ${w} ${h}" class="chart" role="img" aria-label="${esc(o.label||'')}">`;
+ if(o.band)s+=`<rect x="${p.l}" y="${Y(o.band[1])}" width="${w-p.l-p.r}" height="${Y(o.band[0])-Y(o.band[1])}" class="band"/>`;
+ o.yt.forEach(v=>s+=`<line x1="${p.l}" x2="${w-p.r}" y1="${Y(v)}" y2="${Y(v)}" class="grid"/><text x="${p.l-6}" y="${Y(v)+3}" text-anchor="end" class="tick">${v}</text>`);
+ o.xt.forEach(([x,l])=>s+=`<text x="${X(x)}" y="${h-6}" text-anchor="middle" class="tick">${l}</text>`);
+ (o.refs||[]).forEach(([v,c,l])=>s+=`<line x1="${p.l}" x2="${w-p.r}" y1="${Y(v)}" y2="${Y(v)}" class="ref ${c}"/><text x="${w-p.r-2}" y="${Y(v)-3}" text-anchor="end" class="lbl ${c}">${l}</text>`);
+ o.series.forEach(se=>{
+  const d=se.pts.map(([x,y],i)=>(i?'L':'M')+X(x).toFixed(1)+' '+Y(y).toFixed(1)).join('');
+  s+=`<path d="${d}" class="ln ${se.c}" fill="none"/>`;
+  if(se.dots)se.pts.forEach(([x,y])=>s+=`<circle cx="${X(x).toFixed(1)}" cy="${Y(y).toFixed(1)}" r="2.4" class="dot ${se.c}"/>`);
+  const [lx,ly]=se.pts[se.pts.length-1];s+=`<circle cx="${X(lx).toFixed(1)}" cy="${Y(ly).toFixed(1)}" r="4" class="end ${se.c}"/>`;
+ });
+ return s+'</svg>';
+}
+const SYS=[148,152,145,158,150,146,161,155,149,153,158,151,163,172], DIA=[90,93,88,96,91,89,98,95,90,94,97,92,99,104];
+function bpChart(w,h){
+ const d=i=>S.lang==='zh'?`9/${18+i}`:`9/${18+i}`;
+ return lineChart({w,h,x0:0,x1:13,y0:60,y1:190,yt:[80,100,120,140,160,180],xt:[[0,'9/18'],[4,'9/22'],[8,'9/26'],[13,'10/1']],
+  refs:[[180,'crit','180'],[140,'warn','140']],label:L('14 天血压趋势','14-day blood pressure'),
+  series:[{c:'sys',dots:1,pts:SYS.map((v,i)=>[i,v])},{c:'dia',dots:1,pts:DIA.map((v,i)=>[i,v])}]});
+}
+function cgmVal(t){return 6.1+4.3*Math.exp(-((t-8.3)**2)/.8)+5.0*Math.exp(-((t-12.9)**2)/1.1)+4.5*Math.exp(-((t-19.1)**2)/1.0)-2.7*Math.exp(-((t-3.3)**2)/.9)+.25*Math.sin(t*2.3)}
+function cgmChart(w,h){
+ const pts=[];for(let t=0;t<=24;t+=.25)pts.push([t,+cgmVal(t).toFixed(2)]);
+ return lineChart({w,h,x0:0,x1:24,y0:2,y1:16,yt:[3.9,7,10,13.9],xt:[[0,'00:00'],[6,'06:00'],[12,'12:00'],[18,'18:00'],[24,'24:00']],band:[3.9,10],
+  label:L('24 小时 CGM 曲线','24-hour CGM trace'),series:[{c:'cgm',pts}]});
+}
+function hrChart(w,h){
+ const pts=[];for(let t=0;t<=24;t+=.5){let v=64+10*Math.sin((t-9)/24*Math.PI*2)+(t>7&&t<8?18:0)+(t>18&&t<19?12:0)+3*Math.sin(t*3.1);pts.push([t,+v.toFixed(0)])}
+ return lineChart({w,h,x0:0,x1:24,y0:40,y1:110,yt:[50,70,90],xt:[[0,'00:00'],[12,'12:00'],[24,'24:00']],label:L('心率','Heart rate'),series:[{c:'hr',pts}]});
+}
+function tirBar(){
+ const seg=[[1,'#7a1f17',['<3.0','<3.0']],[3,'var(--crit)',['3.0–3.8','3.0–3.8']],[72,'var(--ok)',['3.9–10.0','3.9–10.0']],[18,'var(--warn)',['10.1–13.9','10.1–13.9']],[6,'#8a4f0a',['>13.9','>13.9']]];
+ return `<div class="tir" role="img" aria-label="TIR 72%">${seg.map(([p,c])=>`<i style="width:${p}%;background:${c}"></i>`).join('')}</div>
+ <div class="tir-l">${seg.map(([p,c,l])=>`<div><b>${p}%</b>${T(l)}</div>`).join('')}</div>`;
+}
+function ecgStrip(w,h,af){
+ let rnd=7;const r=()=>{rnd=(rnd*9301+49297)%233280;return rnd/233280};
+ const sec=6,sps=200,beats=[];let t=.3;while(t<sec){beats.push(t);t+=af?.42+r()*.75:.82}
+ const g=(x,m,s,a)=>a*Math.exp(-((x-m)**2)/(2*s*s));
+ const pts=[];for(let i=0;i<=sec*sps;i++){const x=i/sps;let y=0;
+  beats.forEach(b=>{const d=x-b;if(d>-.3&&d<.6){if(!af)y+=g(d,-.16,.025,.12);y+=g(d,-.03,.01,-.12)+g(d,0,.012,1)+g(d,.03,.012,-.25)+g(d,.24,.05,.28)}});
+  if(af)y+=.03*Math.sin(x*38+r()*.6);pts.push([x,y])}
+ const X=x=>x/sec*w,Y=y=>h*.62-y*h*.5;
+ const d=pts.map(([x,y],i)=>(i?'L':'M')+X(x).toFixed(1)+' '+Y(y).toFixed(1)).join('');
+ let gr='';const mm=w/(sec*25);
+ for(let i=0;i*mm<=w;i++)gr+=`<line x1="${(i*mm).toFixed(1)}" x2="${(i*mm).toFixed(1)}" y1="0" y2="${h}" stroke="var(${i%5?'--ecg-minor':'--ecg-major'})" stroke-width="${i%5?.5:1}"/>`;
+ for(let j=0;j*mm<=h;j++)gr+=`<line y1="${(j*mm).toFixed(1)}" y2="${(j*mm).toFixed(1)}" x1="0" x2="${w}" stroke="var(${j%5?'--ecg-minor':'--ecg-major'})" stroke-width="${j%5?.5:1}"/>`;
+ return `<svg viewBox="0 0 ${w} ${h}" class="chart ecg" role="img" aria-label="ECG"><rect width="${w}" height="${h}" fill="var(--ecg-bg)"/>${gr}<path d="${d}" fill="none" stroke="var(--ecg-line)" stroke-width="1.3" stroke-linejoin="round"/><text x="6" y="${h-6}" font-size="8" font-family="var(--f-mono)" fill="var(--muted)">25 mm/s · 10 mm/mV · Lead I</text></svg>`;
+}
+
+/* ---------- top bar ---------- */
+function top(){
+ const tb=(k,zh,en)=>`<button data-act="tab" data-v="${k}" aria-pressed="${S.tab===k}">${L(zh,en)}</button>`;
+ return `<header class="top"><div class="top-in">
+  <div class="brand"><span class="mark">${'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h5l2-5 3 10 2-5h8"/></svg>'}</span>
+   <div><b>${L('RPM 远程监护','RPM Remote Care')}</b><small>${L('诊所端 + 患者 App · 设计稿 v0.10 · 新加坡','Clinic portal + patient app · Draft v0.10 · Singapore')}</small></div></div>
+  <div class="seg" role="group" aria-label="view">${tb('spec','功能规格','Feature spec')}${tb('clinic','诊所端 RPM','Clinic portal')}${tb('app','患者 App','Patient app')}</div>
+  <div class="seg" role="group" aria-label="language"><button data-act="lang" data-v="zh" aria-pressed="${S.lang==='zh'}">中文</button><button data-act="lang" data-v="en" aria-pressed="${S.lang==='en'}">EN</button></div>
+ </div></header>`;
+}
+
+/* ---------- SPEC ---------- */
+function tbl(head,rows){return `<div class="tbl-wrap"><table><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`}
+const NEW=()=>`<span class="tag-new">${L('新增','New')}</span>`, REF=()=>`<span class="tag-ref">${L('参考 MedM','From MedM')}</span>`, ENH=()=>`<span class="tag-new">${L('增强','Extended')}</span>`;
+const pri=p=>`<span class="chip ${p==='P0'?'acc':p==='P1'?'info':''}">${p}</span>`;
+function spec(){
+ const secs=[['ov',L('概述','Overview')],['arch',L('系统架构','Architecture')],['roles',L('角色与权限','Roles')],['clinic',L('诊所端功能','Clinic portal')],['app',L('患者 App 功能','Patient app')],['biz',L('计划、支付与结算','Plans, payments, fees')],['pm',L('患者管理流程','Patient lifecycle')],['fu',L('随访管理','Follow-up')],['dev',L('设备接入','Device integration')],['cms',L('诊所 CMS 对接','Clinic CMS')],['alert',L('告警规则','Alert rules')],['nfr',L('平台与合规','Platform & compliance')],['q',L('待确认问题','Open questions')]];
+ return `<div class="wrap"><div class="spec">
+ <nav class="toc" aria-label="contents">${secs.map(([k,l])=>`<a href="#${k}">${l}</a>`).join('')}</nav>
+ <article class="doc">
+ <section id="ov">
+  <span class="example">${L('设计稿 v0.10 · 2026-10-01 · 首发市场：新加坡','Draft v0.10 · 2026-10-01 · Launch market: Singapore')}</span>
+  <h1>${L('RPM 远程患者监护系统：诊所端与患者 App 功能设计','RPM system: clinic portal and patient app feature design')}</h1>
+  <p class="lede">${L('本设计参考现有 MedM Care（患者 App）与 MedM 管理后台文档，保留其已验证的数据采集、阈值通知、目标与提醒能力，并补齐 MedM 缺少的两块：完整的患者管理（建档、入组、分组、照护团队）和随访管理（随访计划、任务队列、随访记录、失访追踪）。患者 App 同时支持 iOS 和 Android，通过蓝牙连接血压计、心电监测设备、智能戒指和智能手环，通过 API 对接 Sinocare（三诺）CGM。首发市场为新加坡，数据中台自建并部署在新加坡；界面中英文双语（新加坡默认英文）。',
+  'This design builds on the existing MedM Care (patient app) and MedM admin portal documents. It keeps their proven pieces (data capture, threshold notifications, goals, reminders) and adds what MedM lacks: full patient management (registration, enrollment, groups, care teams) and follow-up management (plans, task queue, visit notes, loss-to-follow-up tracking). The patient app runs on iOS and Android, connects over Bluetooth to BP monitors, ECG monitors, smart rings and smart bands, and pulls Sinocare CGM data through an API. Launch market is Singapore; we build our own data platform hosted in Singapore. The UI is bilingual English and Chinese, with English as the Singapore default.')}</p>
+  <div class="callout">${L('<b>与 MedM 参考的主要差异：</b>MedM 的提醒只能由患者自己创建，诊所无法下发；没有随访任务和随访记录；“Encounters”只记录医护在门户上的时长。本设计让医护可为患者下发提醒和随访计划，告警可一键转为随访任务，随访结果写入患者时间线。',
+  '<b>Main gaps vs. the MedM reference:</b> in MedM only patients can create reminders, there is no follow-up task or visit note, and "Encounters" only logs clinician time on the portal. Here clinicians can push reminders and follow-up plans to patients, any alert can become a follow-up task in one click, and outcomes land on the patient timeline.')}</div>
+ </section>
+
+ <section id="arch"><h2>${L('系统架构','Architecture')}</h2>
+  <div class="arch">
+   <div class="col"><span class="lbl">${L('设备层','Devices')}</span>
+    <div class="box"><b>${L('血压计','BP monitor')}</b><small>BLE · GATT 0x1810</small></div>
+    <div class="box"><b>${L('心电卡 MD100C','ECG card MD100C')}</b><small>BLE · ${L('厂商协议 / SDK · HSA Class B 注册中','vendor protocol / SDK · HSA Class B pending')}</small></div>
+    <div class="box"><b>${L('智能戒指 / 手环','Smart ring / band')}</b><small>BLE · HBand (Veepoo) SDK</small></div>
+    <div class="box"><b>Sinocare CGM</b><small>${L('云对云 API（主）+ App 端 API','Cloud-to-cloud API (primary) + in-app API')}</small></div></div>
+   <div class="col"><span class="lbl">${L('患者端','Patient side')}</span>
+    <div class="box hl"><b>${L('患者 App','Patient app')}</b><small>iOS + Android · ${L('单一代码库','single codebase')}</small></div>
+    <div class="box"><b>${L('本地缓存与断点续传','Offline cache + resume')}</b><small>${L('无网时暂存，联网后补传','queue readings offline')}</small></div>
+    <div class="box"><b>${L('Apple 健康 / Health Connect','Apple Health / Health Connect')}</b><small>${L('可选导入步数、睡眠','optional steps, sleep')}</small></div></div>
+   <div class="col"><span class="lbl">${L('自建 RPM 云平台 · 新加坡区域','Own RPM cloud · Singapore region')}</span>
+    <div class="box hl"><b>${L('数据接入与标准化','Ingestion + normalization')}</b><small>${L('统一单位与时间戳，去重','units, timestamps, dedupe')}</small></div>
+    <div class="box"><b>${L('规则引擎','Rules engine')}</b><small>${L('阈值、无数据、目标','thresholds, no-data, goals')}</small></div>
+    <div class="box"><b>${L('随访与任务服务','Follow-up + task service')}</b><small>${L('计划、排程、提醒','plans, scheduling, reminders')}</small></div>
+    <div class="box"><b>${L('Sinocare 连接器','Sinocare connector')}</b><small>${L('云对云拉取 / 回调，按患者授权','cloud pull / webhook per patient consent')}</small></div>
+    <div class="box"><b>${L('通知中心','Notification hub')}</b><small>${L('推送 / 短信 / 邮件 / 站内','push / SMS / email / in-app')}</small></div>
+    <div class="box"><b>${L('时序数据库 + FHIR 存储','Time-series DB + FHIR store')}</b><small>${L('原始读数与标准化记录','raw readings and normalized records')}</small></div></div>
+   <div class="col"><span class="lbl">${L('诊所端','Clinic side')}</span>
+    <div class="box hl"><b>${L('诊所 RPM 门户 (Web)','Clinic RPM portal (web)')}</b><small>${L('医生、护士、健康管理师','doctors, nurses, care managers')}</small></div>
+    <div class="box"><b>${L('管理后台','Admin console')}</b><small>${L('机构、账号、设备库存、配置','org, accounts, inventory, settings')}</small></div>
+    <div class="box"><b>${L('开放接口','Open API')}</b><small>${L('诊所 CMS / NEHR 对接（FHIR）','Clinic CMS / NEHR (FHIR)')}</small></div></div>
+  </div>
+  <p class="flow-note">${L('Sinocare 同时提供 App 端 API 和云对云接口：建议以云对云为主（我们的中台直接从 Sinocare 云拉取，App 关闭时也不断数据，低血糖告警更及时），App 端 API 用于患者在 App 里看实时读数，并作为云接口故障时的补传通道。两路数据在中台按读数时间和传感器序列号去重。患者在 App 里完成一次授权，中台保存授权令牌。',
+  'Sinocare offers both an in-app API and a cloud-to-cloud API. We recommend cloud-to-cloud as the main path: our platform pulls from the Sinocare cloud, so data keeps flowing when the app is closed and low-glucose alerts arrive sooner. The in-app API shows live readings in the app and backfills if the cloud link fails. The platform dedupes both paths by reading time and sensor serial. The patient authorizes once in the app and the platform stores the token.')}</p>
+ </section>
+
+ <section id="roles"><h2>${L('角色与权限','Roles and permissions')}</h2>
+  ${tbl([L('角色','Role'),L('使用端','Uses'),L('主要权限','Main permissions'),L('来源','Source')],[
+   [L('超级管理员 / 机构管理员','Super admin / org admin'),L('管理后台','Admin console'),L('机构与科室、账号与角色、设备库存、阈值默认值、语言与品牌配置、审计日志','Org and departments, accounts and roles, device inventory, default thresholds, language and branding, audit log'),REF()],
+   [L('医生','Doctor'),L('诊所门户 / App','Portal / app'),L('查看所管患者数据、处理告警、制定随访计划和阈值、开具随访结论','View assigned patients, handle alerts, set follow-up plans and thresholds, sign off follow-ups'),ENH()],
+   [L('护士 / 健康管理师','Nurse / care manager'),L('诊所门户','Portal'),L('患者建档入组、设备发放绑定、告警初筛、执行随访、患者沟通','Register and enroll patients, issue and bind devices, triage alerts, run follow-ups, message patients'),NEW()],
+   [L('患者','Patient'),L('患者 App','Patient app'),L('测量与同步、查看自己的数据、提醒、随访问卷、与照护团队沟通','Measure and sync, view own data, reminders, follow-up surveys, message care team'),REF()],
+   [L('平台集中护士','Central nurse team'),L('运营后台','Operations console'),L('跨机构审阅数据、联系患者、健康教育；不诊断、不改药，需医疗判断时升级给患者所属诊所医生','Review data across partners, contact patients, educate; no diagnosis or prescribing, escalate medical decisions to the patient’s clinic doctor'),NEW()],
+   [L('平台运营','Platform operations'),L('运营后台','Operations console'),L('合作机构、计划与定价、订阅与收款、服务费结算','Partners, plans and pricing, subscriptions and payments, service-fee settlement'),NEW()],
+   [L('体检中心人员','Screening centre staff'),L('体检中心端','Screening portal'),L('检查单、传感器库存、报告签发、转长期计划、采购对账','Check orders, sensor stock, report sign-off, conversion to plans, purchase statements'),NEW()],
+   [L('渠道合作方','Channel partner'),L('合作方门户（只读）','Partner portal (read-only)'),L('查看自己带来的注册、付费人数和佣金结算，下载推广物料；看不到任何患者身份或健康数据','See own sign-ups, paid counts and payouts, download referral kit; never sees patient identity or health data'),NEW()],
+   [L('家属 / 照护者','Family caregiver'),L('患者 App','Patient app'),L('经患者授权后查看数据、接收告警副本','With patient consent, view data and get alert copies'),NEW()]
+  ])}
+ </section>
+
+ <section id="clinic"><h2>${L('诊所端 RPM 功能','Clinic portal features')}</h2>
+  ${tbl([L('模块','Module'),L('功能','Features'),L('优先级','Priority'),L('来源','Source')],[
+   [`<b>${L('工作台','Dashboard')}</b>`,L('今日待办：未处理告警、今日随访、逾期随访、无数据患者；在管人数、数据上传率','To-do: open alerts, today’s and overdue follow-ups, silent patients; census, upload rate'),pri('P0'),NEW()],
+   [`<b>${L('患者管理','Patients')}</b>`,L('建档（+65 手机号即可，可选 NRIC/FIN 掩码存储）、入组到管理项目、PDPA 同意书、标签与分组、照护团队分配、诊断、诊所 CMS 病历号、出组结案','Registration (+65 mobile is enough; optional NRIC/FIN stored masked), program enrollment, PDPA consent, tags and groups, care team, diagnoses, clinic CMS ID, discharge'),pri('P0'),ENH()],
+   [`<b>${L('患者详情','Patient record')}</b>`,L('生命体征总览、血压趋势、CGM 曲线与 TIR、心电图回放、睡眠与活动、设备、阈值、随访时间线、沟通记录','Vitals overview, BP trend, CGM trace and TIR, ECG review, sleep and activity, devices, thresholds, follow-up timeline, messages'),pri('P0'),ENH()],
+   [`<b>${L('随访管理','Follow-up')}</b>`,L('随访计划模板、自动排程、任务看板、电话/视频/门诊/问卷随访、随访记录表单、失访标记、随访统计','Plan templates, auto-scheduling, task board, phone/video/clinic/survey follow-ups, visit note form, loss to follow-up, stats'),pri('P0'),NEW()],
+   [`<b>${L('告警中心','Alerts')}</b>`,L('分级告警队列、认领与处理、处理备注、一键转随访、升级给医生','Tiered queue, claim and resolve, notes, one-click to follow-up, escalate to doctor'),pri('P0'),ENH()],
+   [`<b>${L('阈值与目标','Thresholds & goals')}</b>`,L('机构默认阈值 + 患者个性化阈值；每日/每周测量次数目标；步数、睡眠目标','Org defaults plus per-patient thresholds; daily/weekly measurement goals; steps, sleep'),pri('P0'),REF()],
+   [`<b>${L('提醒下发','Care reminders')}</b>`,L('医护为患者设置用药和测量提醒，患者 App 自动生效','Clinicians set medication and measurement reminders that appear in the patient app'),pri('P1'),NEW()],
+   [`<b>${L('设备管理','Devices')}</b>`,L('设备库存（序列号、型号、状态）、发放与绑定患者、回收、电量与最后同步','Inventory (serial, model, status), issue and bind to patient, return, battery and last sync'),pri('P1'),REF()],
+   [`<b>${L('医患沟通','Messaging')}</b>`,L('图文消息、快捷回复模板、视频随访入口','Text and image messages, quick replies, video visit link'),pri('P1'),NEW()],
+   [`<b>${L('系统设置','Settings')}</b>`,L('账号与角色权限（含 2FA、SMC/SNB 注册号）、默认告警阈值与升级规则（需临床签字）、随访模板编辑、问卷编辑（多语言、答案触发随访或告警）、通知渠道与短信模板、诊所信息、审计日志','Accounts and role permissions (2FA, SMC/SNB numbers), default thresholds and escalation (clinical sign-off), follow-up template editor, survey builder (multilingual, answers trigger follow-ups or alerts), notification channels and SMS templates, clinic profile, audit log'),pri('P0'),ENH()],
+   [`<b>Healthier SG</b>`,L('按年度跟踪每位 HSG 患者的慢病固定付费条件（健康计划、身高体重、诊断编码、吸烟状况、2 次复诊间隔 ≥92 天）和心血代谢指标包（HbA1c×2、血压×2、LDL-C、eGFR、尿 ACR/PCR）；估算已锁定和还能争取的金额；缺口患者一键约复诊和化验、提醒患者；正式上报仍在 Plato','Per-year tracking of each HSG patient’s fixed-pay criteria (health plan, height/weight, diagnosis codes, smoking, 2 consults ≥92 days apart) and cardiometabolic bundle (HbA1c×2, BP×2, LDL-C, eGFR, urine ACR/PCR); secured vs still-available payments; book visits and labs or remind patients from the gap list; submission stays in Plato'),pri('P0'),NEW()],
+   [`<b>${L('报表','Reports')}</b>`,L('依从性、告警处理时效、随访完成率、监测与随访时长；慢病管理项目（CDMP / Healthier SG）随访记录导出；导出 PDF/Excel','Adherence, alert response time, follow-up completion, monitoring and follow-up time; chronic care (CDMP / Healthier SG) follow-up export; PDF/Excel export'),pri('P1'),ENH()]
+  ])}
+ </section>
+
+ <section id="app"><h2>${L('患者 App 功能（iOS + Android）','Patient app features (iOS + Android)')}</h2>
+  ${tbl([L('模块','Module'),L('功能','Features'),L('优先级','Priority'),L('来源','Source')],[
+   [`<b>${L('注册与绑定诊所','Sign-up & clinic link')}</b>`,L('+65 手机号验证码登录，或 Singpass 登录（P1）；输入诊所邀请码或扫描二维码加入；PDPA 同意与远程监护知情同意','+65 mobile + SMS code, or Singpass (P1); join by clinic code or QR; PDPA and remote monitoring consent'),pri('P0'),REF()],
+   [`<b>${L('首页','Home')}</b>`,L('今日任务（测量、服药、问卷）、最新指标、设备连接状态、下次随访','Today’s tasks (measure, meds, survey), latest readings, device status, next follow-up'),pri('P0'),ENH()],
+   [`<b>${L('设备连接','Devices')}</b>`,L('蓝牙配对向导；自动接收与后台同步；Sinocare CGM 账号授权；设备电量与最后同步时间','Bluetooth pairing wizard; auto and background sync; Sinocare CGM authorization; battery and last sync'),pri('P0'),REF()],
+   [`<b>${L('健康数据','My data')}</b>`,L('血压、血糖 (CGM)、心电、心率、血氧、睡眠、步数趋势；手动录入、编辑、删除；标签和备注','BP, glucose (CGM), ECG, HR, SpO₂, sleep, steps; manual add/edit/delete; tags and notes'),pri('P0'),REF()],
+   [`<b>${L('随访','Follow-ups')}</b>`,L('随访日程、随访问卷填写、视频随访入口、查看医生随访结论','Schedule, surveys, video visit entry, doctor’s conclusions'),pri('P0'),NEW()],
+   [`<b>${L('提醒','Reminders')}</b>`,L('用药与测量提醒（患者自建 + 医护下发）；服用/稍后/跳过','Medication and measurement reminders (self-made + from clinic); take / snooze / skip'),pri('P0'),ENH()],
+   [`<b>${L('消息','Messages')}</b>`,L('与照护团队图文沟通；告警后护士回访消息','Chat with care team; nurse follow-up after alerts'),pri('P1'),NEW()],
+   [`<b>${L('家属共享','Family sharing')}</b>`,L('邀请家属查看数据与接收告警','Invite family to view data and get alerts'),pri('P2'),NEW()],
+   [`<b>${L('设置','Settings')}</b>`,L('英/中文切换（新加坡默认英文）、血糖单位 mmol/L、通知、数据授权与撤回','English/Chinese (English default in Singapore), glucose in mmol/L, notifications, data consent and withdrawal'),pri('P0'),REF()]
+  ])}
+ </section>
+
+
+ <section id="biz"><h2>${L('计划、支付与结算','Plans, payments and fees')}</h2>
+  <p>${L('按调整后的商业模式：主要由患者按月付费购买监测计划；诊所负责开计划和临床服务，按实际提供的服务拿固定服务费；体检中心按批发价采购 14 天检查套装；平台集中护士团队承担日常审阅。门户顶部可切换“诊所 / 体检中心 / 平台运营”三种视图。',
+  'Per the revised business model: patients mainly pay monthly for a care plan; clinics start plans and provide clinical services, earning a fixed fee for services delivered; screening centres buy 14-day check kits at wholesale; a central nurse team handles daily review. Switch between the Clinic, Screening and Operations views at the top of the portal.')}</p>
+  ${tbl([L('模块','Module'),L('功能','Features'),L('使用方','Used by'),L('优先级','Priority')],[
+   [`<b>${L('计划目录与定价','Plan catalogue & pricing')}</b>`,L('计划内容、患者价、诊所服务费率（按审阅分工两档）、最短期限、加购项','Plan contents, patient price, clinic fee (two rates by review split), minimum term, add-ons'),L('平台运营','Operations'),pri('P0')],
+   [`<b>${L('开计划','Start a plan')}</b>`,L('医护在患者详情或计划页开出计划，选择审阅分工和设备交付方式，向患者发送支付链接；需确认已向患者说明费用','From the patient record or plans page; choose review split and device delivery; send pay link; confirm fees were explained'),L('诊所','Clinic'),pri('P0')],
+   [`<b>${L('支付与订阅','Payments & subscriptions')}</b>`,L('App 内支付（PayNow、银行卡、Apple Pay / Google Pay），自动续费，扣款失败重试与暂停，收据，取消与暂停','In-app payment (PayNow, cards, Apple Pay / Google Pay), auto-renew, retry and pause on failure, receipts, cancel and pause'),L('患者 / 平台运营','Patients / Operations'),pri('P0')],
+   [`<b>${L('服务费结算','Service-fee settlement')}</b>`,L('按人·月和审阅分工计算诊所服务费，月度对账单 PDF','Clinic fees by patient-month and review split; monthly PDF statement'),L('诊所 / 平台运营','Clinic / Operations'),pri('P1')],
+   [`<b>${L('集中审阅工作台','Central review console')}</b>`,L('跨机构告警和周审阅队列、响应时限、一键升级给诊所医生（App 通知 + Plato 任务）','Cross-partner alert and weekly-review queue, response SLAs, one-click escalation to the clinic doctor (app + Plato task)'),L('平台集中护士','Central nurses'),pri('P0')],
+   [`<b>${L('体检检查单','Screening check orders')}</b>`,L('14 天 CGM 检查和心电筛查：下单、佩戴、报告签发、转长期计划；传感器库存与采购对账','14-day CGM check and ECG screening: order, wear, report sign-off, conversion to plans; sensor stock and purchase statements'),L('体检中心','Screening centre'),pri('P0')],
+   [`<b>${L('渠道归属与佣金','Channel attribution & commissions')}</b>`,L('每个渠道和推广员有专属推荐码、二维码和链接；注册时记录获客渠道（与照护诊所分开）；按渠道统计注册、付费、留存；佣金规则（每个有效入组固定金额或固定月费）、30 天确认期、退款扣回、结算单；医疗机构不可设佣金；中介门户不显示健康数据','Unique code, QR and link per channel and promoter; acquisition channel recorded at sign-up, separate from care clinic; sign-ups, paid and retention by channel; commission rules (fixed per qualified enrolment or flat monthly), 30-day confirmation, clawback, statements; no commission for healthcare providers; channel portal shows no health data'),L('平台运营 / 渠道合作方','Operations / channel partners'),pri('P0')],
+   [`<b>${L('视频复诊预约','Video consult booking')}</b>`,L('App 读取 Plato 可约时段并预约；费用由诊所在 Plato 收取，可用 CHAS / MediSave','App reads Plato slots and books; the clinic charges in Plato, CHAS / MediSave can apply'),L('患者 / 诊所','Patients / Clinic'),pri('P1')]
+  ])}
+  <div class="callout">${L('<b>合规要点：</b>新加坡医疗理事会 (SMC) 道德准则规定，医生不能仅因转介病人或推荐产品而获得经济利益，费用必须事先透明告知。因此诊所收入设计为“按实际提供的临床服务计的固定服务费”，不按转介人数或销售额提成，并在患者账单里逐项列出。MediSave 不能支付计划月费。平台集中护士提供远程服务，是否需要 HCSA 远程医疗相关牌照需在上线前确认。',
+  '<b>Compliance:</b> the Singapore Medical Council (SMC) ethical code bars doctors from financial benefit solely for referring patients or prescribing products, and fees must be disclosed in advance. So clinic income is a fixed fee for clinical services actually delivered, never a commission on referrals or sales, and it is itemised on the patient’s bill. MediSave cannot pay plan fees. Whether the central nurse service needs an HCSA telemedicine-related licence must be confirmed before launch.')}</div>
+ </section>
+ <section id="pm"><h2>${L('患者管理流程','Patient management lifecycle')}</h2>
+  <ol class="steps">
+   <li><b>${L('建档','Register')}</b><span>${L('护士建档或患者自注册；手机号、证件/病历号、诊断','Nurse creates record or patient self-registers; phone, ID/MRN, diagnosis')}</span></li>
+   <li><b>${L('入组','Enroll')}</b><span>${L('选择管理项目，签署知情同意，分配医生与护士','Pick a program, sign consent, assign doctor and nurse')}</span></li>
+   <li><b>${L('设备发放','Issue devices')}</b><span>${L('库存设备绑定到患者；App 内完成配对与 CGM 授权','Bind inventory devices; pair and authorize CGM in app')}</span></li>
+   <li><b>${L('监测','Monitor')}</b><span>${L('数据自动上传，规则引擎持续检查','Readings upload; rules run continuously')}</span></li>
+   <li><b>${L('告警处理','Triage')}</b><span>${L('护士初筛，必要时升级医生或转为随访','Nurse triages, escalates or creates a follow-up')}</span></li>
+   <li><b>${L('随访','Follow up')}</b><span>${L('按计划或告警触发，记录结论与下次随访','Scheduled or alert-driven; record outcome and next date')}</span></li>
+   <li><b>${L('结案 / 出组','Discharge')}</b><span>${L('达到目标或项目结束；回收设备，生成总结报告','Goal met or program ends; return devices, summary report')}</span></li>
+  </ol>
+ </section>
+
+ <section id="fu"><h2>${L('随访管理设计','Follow-up management')}</h2>
+  <h3>${L('随访来源','Where follow-ups come from')}</h3>
+  ${tbl([L('来源','Source'),L('说明','How it works'),L('示例','Example')],[
+   [L('计划随访','Scheduled'),L('入组时按项目模板自动生成整个周期的随访任务','Generated from the program template at enrollment'),L('高血压：入组第 7 天电话，之后每月一次','HTN: phone call on day 7, then monthly')],
+   [L('告警触发','Alert-triggered'),L('处理告警时一键创建，自动带入告警数据','Created from an alert with its reading attached'),L('血压 172/104 → 当天电话随访','BP 172/104 → same-day call')],
+   [L('出院后','Post-discharge'),L('出院登记后按 7/14/30 天排程','Day 7/14/30 after discharge'),L('心衰出院第 7 天随访','HF day-7 call')],
+   [L('临时随访','Ad hoc'),L('医护手动新增','Added by a clinician'),L('患者来电咨询','Patient calls in')]
+  ])}
+  <h3>${L('任务状态','Task states')}</h3>
+  <div class="states"><span class="chip info">${L('待随访','Upcoming')}</span><span class="arrow">→</span><span class="chip acc">${L('今日','Due today')}</span><span class="arrow">→</span><span class="chip ok">${L('已完成','Done')}</span><span class="arrow">·</span><span class="chip crit">${L('已逾期','Overdue')}</span><span class="arrow">·</span><span class="chip warn">${L('未联系上（3 次后标记失访）','Unreached (lost after 3 tries)')}</span><span class="arrow">·</span><span class="chip">${L('已取消','Cancelled')}</span></div>
+  <h3>${L('随访记录字段','Visit note fields')}</h3>
+  <p>${L('随访方式、是否联系上、患者自述症状、近 7 天测量依从性（系统自动带入）、用药依从性、本次指标摘要（自动带入）、处理措施（调整用药 / 加强监测 / 健康教育 / 转诊 / 预约门诊）、医生结论、下次随访日期。问卷可由机构自定义，结果结构化存储便于统计。',
+  'Method, reached or not, reported symptoms, 7-day measurement adherence (auto-filled), medication adherence, vitals summary (auto-filled), actions (adjust meds / more monitoring / education / referral / book visit), doctor’s conclusion, next date. Surveys are configurable per clinic and stored as structured data for reporting.')}</p>
+ </section>
+
+ <section id="dev"><h2>${L('设备接入','Device integration')}</h2>
+  ${tbl([L('设备','Device'),L('连接方式','Connection'),L('数据','Data'),L('说明','Notes')],[
+   [L('血压计','BP monitor'),'BLE · Blood Pressure Service 0x1810',L('收缩压、舒张压、脉率、测量时间','SYS, DIA, pulse, timestamp'),L('优先选支持标准 GATT 的型号，可减少逐个对接','Prefer standard-GATT models to avoid per-model work')],
+   [L('心电卡 MD100C','ECG card MD100C'),L('BLE 自定义服务 0xFEE9 · 厂商 iOS / Android SDK','BLE custom service 0xFEE9 · vendor iOS / Android SDK'),L('30 秒单导心电（250 Hz）、心率、血氧 + 脉率、导联脱落状态；房颤风险报告（字段待厂商提供）','30 s single-lead ECG (250 Hz), HR, SpO₂ + pulse, lead-off status; AF risk report (field pending from vendor)'),L('正在注册 HSA Class B。平台原样展示设备算法给出的节律提示并标注来源，不做二次判读；波形按段上传，保存原始文件供医生复核','HSA Class B registration in progress. The platform shows the device’s own rhythm flags with their source and adds no interpretation of its own; waveforms upload in chunks and the raw file is kept for doctor review')],
+   [L('智能戒指','Smart ring'),'BLE · HBand (Veepoo) SDK',L('心率、HRV、血氧、睡眠、体温（型号未定，按能力表适配）','HR, HRV, SpO₂, sleep, temperature (model-dependent)'),L('与手环共用同一 SDK，一次接入两类设备；多为周期同步','Shares one SDK with the band, so one integration covers both; periodic sync')],
+   [L('智能手环','Smart band'),'BLE · HBand (Veepoo) SDK',L('步数、心率、睡眠、血氧；部分型号有血压估算','Steps, HR, sleep, SpO₂; some models estimate BP'),L('手环血压为估算值，只作参考，不触发临床告警','Band BP is an estimate: shown for reference, never triggers clinical alerts')],
+   [`Sinocare CGM`,L('云对云 API（主）+ App 端 API','Cloud-to-cloud API (primary) + in-app API'),L('连续血糖值、趋势箭头、传感器状态','Glucose readings, trend arrow, sensor status'),L('两路数据按读数时间 + 传感器序列号去重；需确认接口频率限制与延迟','Dedupe both paths by reading time + sensor serial; confirm rate limits and latency')]
+  ])}
+  <p>${L('<b>iOS：</b>CoreBluetooth，开启 bluetooth-central 后台模式，后台扫描需指定服务 UUID。<b>Android：</b>Android 12+ 需申请“附近设备”（BLUETOOTH_SCAN / CONNECT）权限；长时间同步使用前台服务；注意国产 ROM 的后台限制，引导用户关闭省电优化。',
+  '<b>iOS:</b> CoreBluetooth with the bluetooth-central background mode; background scans must name service UUIDs. <b>Android:</b> Android 12+ needs the Nearby devices permission (BLUETOOTH_SCAN / CONNECT); long syncs use a foreground service; some OEM ROMs kill background apps, so guide users to turn off battery optimization.')}</p>
+  <div class="callout">${L('<b>HBand SDK（github.com/HBandSDK）：</b>提供 iOS（Objective-C）和 Android 原生 SDK，Apache-2.0 许可，中英文文档，含固件升级 (OTA)。没有 Flutter / React Native 版本，所以 App 用 Flutter 时通过 platform channel 分别封装两端原生 SDK，对上层暴露统一的 Dart 接口（连接、同步、读取各类数据）。具体可读取的指标以所选戒指和手环型号为准，需向 Veepoo 确认。',
+  '<b>HBand SDK (github.com/HBandSDK):</b> native iOS (Objective-C) and Android SDKs, Apache-2.0, docs in Chinese and English, includes firmware update (OTA). There is no Flutter or React Native package, so a Flutter app wraps each native SDK behind a platform channel and exposes one Dart interface (connect, sync, read metrics). Which metrics are available depends on the chosen ring and band models; confirm with Veepoo.')}</div>
+
+ <div class="callout">${L('<b>心电卡 MD100C 通信协议 v1.0.0 要点（来自厂商文档）：</b>BLE 服务 0000FEE9-…，1 个写特征 + 7 个通知特征；帧格式 0x55 0xAA + 命令 + 参数 + 校验和。离线模式可读取记录条数、每条记录的时间和心率、30 秒波形（7,500 个采样点，即 250 Hz，12 位，264 = 1 mV），以及血氧记录；读取后可按条删除。实时模式可开始/结束测量，推送实时心电、血氧脉率和导联脱落状态。App 每次连接先同步日期时间（0x7A/0x7B），再拉取离线记录。<br><b>注意：</b>这份协议里心电记录的 uStatus、uResult 字段标为“保留”，没有定义房颤风险。房颤风险报告需要厂商提供新版协议或 SDK 的字段说明；在此之前，所有心电记录进入“待医生复核”队列，不自动生成房颤告警。',
+  '<b>ECG card MD100C protocol v1.0.0 (vendor document):</b> BLE service 0000FEE9-…, one write characteristic and seven notify characteristics; frames are 0x55 0xAA + command + params + checksum. Offline mode reads the record count, each record’s time and HR, the 30 s waveform (7,500 samples, i.e. 250 Hz, 12-bit, 264 = 1 mV) and SpO₂ records, and can delete records one by one after reading. Real-time mode starts and stops measurement and streams live ECG, SpO₂ + pulse and lead-off status. On every connection the app syncs date and time (0x7A/0x7B), then pulls offline records.<br><b>Note:</b> in this protocol the ECG record fields uStatus and uResult are marked reserved, and no AF risk is defined. The AF risk report needs a field definition from the vendor’s newer protocol or SDK. Until then, every ECG goes to a doctor review queue and no AF alert is raised automatically.')}</div>
+ </section>
+
+ <section id="cms"><h2>${L('诊所 CMS 对接：Plato（预留）','Clinic CMS integration: Plato (reserved)')}</h2>
+  <p>${L('第一版不依赖 CMS 上线，但中台预留集成层：所有对外数据走统一的 FHIR R4 接口，诊所 CMS 用适配器接入（支持 FHIR、REST API、HL7 v2 或 CSV/SFTP 文件交换）。患者用“RPM 患者 ID ↔ CMS 病历号”映射表关联。在 CMS 接通之前，随访记录和监测摘要可导出 PDF 供手动归档。',
+  'Version 1 does not depend on the CMS, but the platform reserves an integration layer: all outbound data uses one FHIR R4 interface, and each clinic CMS connects through an adapter (FHIR, REST API, HL7 v2 or CSV/SFTP). Patients link through an RPM ID ↔ CMS record number map. Until the CMS is connected, follow-up notes and monitoring summaries export to PDF for manual filing.')}</p>
+  <div class="callout">${L('<b>首批诊所使用 Plato（API 文档已核对）。</b>地址 https://clinic.platomedical.com/api/{db}/…，{db} 是诊所数据库名；认证用 <code>Authorization: Bearer &lt;API key&gt;</code>，每家诊所一个 key。文档未写频率限制，列表接口用 skip / current_page 分页。适配器按下表对接；Plato 没有可写入的体征/图表接口，所以监测数据以病历备注 + PDF 附件的形式进入 Plato，原始读数留在我们的中台。',
+  '<b>The first clinics use Plato (API docs checked).</b> Base URL https://clinic.platomedical.com/api/{db}/…, where {db} is the clinic database name; auth is <code>Authorization: Bearer &lt;API key&gt;</code>, one key per clinic. No rate limits are documented; list endpoints page with skip / current_page. The adapter maps as below. Plato has no writable vitals/graphing endpoint, so monitoring data enters Plato as case notes plus PDF attachments, and raw readings stay in our platform.')}</div>
+  ${tbl([L('数据','Data'),L('方向','Direction'),L('Plato 接口','Plato endpoint'),L('做法','How'),L('优先级','Priority')],[
+   [L('患者主数据','Patient demographics'),'Plato → RPM','<code>GET /search/patient</code> · <code>GET /patient</code>',L('建档时按 NRIC / 手机号搜索匹配；用 modified_since 增量同步；订阅 webhook patient:upsert','Match by NRIC / mobile at registration; incremental sync with modified_since; webhook patient:upsert'),pri('P1')],
+   [L('门诊预约','Appointments'),'Plato ⇄ RPM','<code>/appointment</code> · <code>POST /appointment/slots</code>',L('门诊随访直接在 Plato 查空位并预约；订阅 webhook appointment:upsert','Find slots and book clinic follow-ups in Plato; webhook appointment:upsert'),pri('P1')],
+   [L('随访记录','Follow-up notes'),'RPM → Plato','<code>POST /patient/note</code>',L('写入病历备注（folder “Casenotes”），可带 ICD-10-AM 诊断；先以草稿 draft=1 写入，医生在 Plato 确认','Written as a case note (folder “Casenotes”) with optional ICD-10-AM diagnosis; saved as draft=1 for the doctor to confirm in Plato'),pri('P1')],
+   [L('监测报告','Monitoring report'),'RPM → Plato','<code>POST /patient/note</code> + PUT',L('病历备注附 PDF（血压、CGM、心电报告）：接口返回预签名 URL，再用 HTTP PUT 上传文件','Case note with PDF attachments (BP, CGM, ECG reports): the response returns pre-signed URLs, then upload with HTTP PUT'),pri('P1')],
+   [L('紧急告警待办','Critical alert to-do'),'RPM → Plato','<code>POST /task</code>',L('紧急告警同时在 Plato 给责任医生建任务，医生不开 RPM 门户也能看到','Critical alerts also create a Plato task for the doctor, visible without opening the RPM portal'),pri('P1')],
+   [L('随访问卷','Follow-up survey'),'RPM ⇄ Plato','<code>POST /form/create_link</code>',L('可选：沿用诊所在 Plato 已有的表单模板，发链接给患者填写','Optional: reuse the clinic’s Plato form templates and send the link to the patient'),pri('P2')],
+   [L('WhatsApp 通知','WhatsApp messages'),'RPM → Plato','<code>POST /whatsapp/send</code>',L('可选：用诊所已配置的 WhatsApp 发随访提醒（新加坡常用渠道）','Optional: send follow-up reminders through the clinic’s WhatsApp setup (common in Singapore)'),pri('P2')],
+   [L('诊断与处方','Diagnoses and meds'),'Plato → RPM','—',L('API 未提供处方/用药读取接口；服药提醒由医护在 RPM 中设置','No prescription read endpoint in the API; clinicians set med reminders in RPM'),'—']
+  ])}
+  <div class="callout">${L('<b>其他待定接口也按同样方式预留：</b>Sinocare 连接器同时支持推送 (webhook) 和定时拉取两种模式，接口确定后改配置即可；戒指和手环通过“设备能力表”适配，型号确定后只需登记该型号支持哪些指标，App 和诊所端按表自动显示。',
+  '<b>Other undecided interfaces are reserved the same way:</b> the Sinocare connector supports both push (webhook) and scheduled polling, so the choice becomes a config change; rings and bands map through a device capability table, so once models are chosen we only register which metrics each supports and the app and portal display them automatically.')}</div>
+ </section>
+
+ <section id="alert"><h2>${L('默认告警规则（待临床确认）','Default alert rules (for clinical sign-off)')}</h2>
+  ${tbl([L('指标','Metric'),`<span class="chip crit">${L('紧急','Critical')}</span>`,`<span class="chip warn">${L('关注','Watch')}</span>`],[
+   [L('血压','Blood pressure'),'≥ 180/110 mmHg','≥ 160/100 · ≤ 90/60 mmHg'],
+   [L('血糖 (CGM)','Glucose (CGM)'),'< 3.0 · > 16.7 mmol/L',L('< 3.9 持续 15 分钟 · > 13.9 持续 2 小时','< 3.9 for 15 min · > 13.9 for 2 h')],
+   [L('心电（心电卡房颤风险报告）','ECG (ECG card AF risk report)'),L('房颤字段到位后：高风险（字段待厂商提供）','Once the AF field exists: high risk (field pending from vendor)'),L('现在：每条心电进入医生判读队列；导联脱落提示重测。字段到位后：中风险为关注级','Now: every ECG goes to the doctor review queue; lead-off prompts a retake. Once the field exists: medium risk is Watch')],
+   [L('静息心率','Resting HR'),'> 130 · < 40 bpm','> 110 · < 50 bpm'],
+   [L('血氧','SpO₂'),'< 88%',L('< 92% 持续 10 分钟','< 92% for 10 min')],
+   [L('无数据','No data'),'—',L('超过 72 小时无任何上传','Nothing uploaded for 72 h')]
+  ])}
+  <p>${L('机构可修改默认值，医生可为单个患者设置个性化阈值（参考 MedM “患者级阈值”）。紧急告警推送给值班护士，15 分钟未认领自动升级给医生。',
+  'Clinics can edit defaults; doctors can set per-patient thresholds (as in MedM’s patient-level thresholds). Critical alerts go to the on-duty nurse and escalate to the doctor if unclaimed after 15 minutes.')}</p>
+  <p>${L('血压告警只看医用血压计的读数，手环血压估算值不参与告警。','BP alerts use the medical BP monitor only; band BP estimates never trigger alerts.')}</p>
+ </section>
+
+ <section id="nfr"><h2>${L('平台与合规','Platform and compliance')}</h2>
+  ${tbl([L('项目','Item'),L('建议','Recommendation')],[
+   [L('App 技术栈','App stack'),L('建议 Flutter：一套代码覆盖 iOS 与 Android；HBand SDK 和心电设备 SDK 用 platform channel 封装，血压计走标准 GATT','Recommend Flutter: one codebase for iOS and Android; HBand and ECG SDKs wrapped via platform channels; BP monitor uses standard GATT')],
+   [L('数据中台（自建）','Data platform (own)'),L('部署在新加坡区域云；API 网关、设备数据接入、Sinocare 连接器、时序库、FHIR R4 存储、规则引擎、随访任务服务、通知中心、审计日志','Hosted in a Singapore cloud region: API gateway, device ingestion, Sinocare connector, time-series DB, FHIR R4 store, rules engine, follow-up service, notifications, audit log')],
+   [L('最低系统版本','Minimum OS'),'iOS 15+ · Android 8.0+'],
+   [L('双语','Bilingual'),L('全部文案走 i18n 资源，新加坡默认英文，可切换中文；预留马来文、淡米尔文；血糖单位 mmol/L；日期 DD/MM/YYYY','All copy in i18n resources; English default in Singapore with Chinese switch; room for Malay and Tamil; glucose in mmol/L; dates DD/MM/YYYY')],
+   [L('数据安全','Security'),L('传输 TLS 1.2+，存储加密，最小权限，操作审计日志','TLS 1.2+, encryption at rest, least privilege, audit log')],
+   [L('合规（新加坡）','Compliance (Singapore)'),L('PDPA 及 PDPC 医疗行业指引（同意、用途限制、数据泄露 3 天内通报）；NRIC/FIN 仅在识别患者必要时收集并掩码显示；诊所提供远程监护需符合 MOH《医疗服务法》(HCSA) 的远程医疗要求；若软件做诊断性判读（如心电节律提示），需评估是否属 HSA 医疗器械软件 (SaMD)。心电卡本身按 HSA Class B 注册（进行中），平台只展示设备算法结果、不做自有判读，以缩小平台的 SaMD 范围（需法规顾问确认）；数据存放在新加坡境内','PDPA and PDPC healthcare guidance (consent, purpose limits, breach notice within 3 days); collect NRIC/FIN only when needed to identify patients and show it masked; clinics running remote monitoring follow MOH Healthcare Services Act (HCSA) telemedicine rules; if the software interprets data (e.g. ECG rhythm flags), assess whether it is HSA software as a medical device (SaMD). The ECG card is being registered as HSA Class B; the platform only shows the device’s own results and adds no interpretation, to narrow the platform’s SaMD scope (to be confirmed by a regulatory advisor); data stays in Singapore')]
+  ])}
+ </section>
+
+ <section id="q"><h2>${L('待确认问题','Open questions')}</h2>
+  <ol class="qlist">
+   <li>${L('Sinocare 云对云接口是推送（webhook）还是定时拉取？数据延迟和频率限制是多少？在新加坡是否有数据节点？','Is Sinocare cloud-to-cloud push (webhook) or polling? What latency and rate limits? Is there a Singapore data region?')}</li>
+   <li>${L('心电卡 HSA Class B 注册预计何时完成？首发上线是否要等注册完成？','When is the ECG card’s HSA Class B registration expected? Does launch wait for it?')}</li>
+   <li>${L('戒指和手环的具体 Veepoo 型号？各自能读取哪些指标？','Which Veepoo ring and band models, and which metrics does each expose?')}</li>
+   <li>${L('Plato webhook 文档只列出 patient:upsert 和 appointment:upsert 两个事件，没有说明消息格式和签名校验。需向 Plato 确认 payload 格式和签名方式，以及接口频率限制。是否需要 NEHR 和 Singpass？','Plato webhook docs list only patient:upsert and appointment:upsert, with no payload format or signing. Ask Plato for the payload format, signing method and rate limits. Do we need NEHR and Singpass?')}</li>
+   <li>${L('MD100C 协议 v1.0.0 没有房颤风险字段（uResult 为保留）。需要厂商提供含房颤结果的协议版本或 SDK 文档：风险分几档、对应哪个字段。','MD100C protocol v1.0.0 has no AF risk field (uResult is reserved). We need the vendor’s protocol or SDK docs with the AF result: how many levels, and which field.')}</li>
+   <li>${L('Healthier SG 看板需要从 Plato 读取化验结果和诊断编码：要确认 Plato API 能否读到化验结果字段。居家血压能否计入指标包，需向 MOH / AIC 确认。','The Healthier SG board needs lab results and diagnosis codes from Plato: confirm the Plato API exposes lab results. Ask MOH / AIC whether home BP counts toward the bundle.')}</li>
+   <li>${L('计划价格和诊所服务费率要等设备到岸成本和护士人力成本才能定；页面中的价格均为示例。','Plan prices and clinic fee rates wait on device landed cost and nurse labour cost; all prices shown are samples.')}</li>
+   <li>${L('渠道佣金的金额和形式（每个有效入组固定金额还是固定月费），以及向中介付佣金是否符合 SMC 准则和《防止贪污法》，需律师确认。','Commission amounts and form (fixed per enrolment or flat monthly), and whether paying channels is compliant with SMC guidance and the Prevention of Corruption Act; needs a lawyer.')}</li>
+   <li>${L('支付服务商选型（需支持 PayNow、银行卡、Apple Pay / Google Pay 和自动续费）。','Choose a payment provider (PayNow, cards, Apple Pay / Google Pay, recurring billing).')}</li>
+   <li>${L('集中护士团队的雇佣主体与资质，以及是否需要 HCSA 相关牌照；诊所服务费结构请律师按 SMC 准则确认。','Who employs the central nurses, their credentials, and whether an HCSA licence is needed; have a lawyer check the clinic fee structure against SMC guidance.')}</li>
+   <li>${L('首批管理项目（高血压、糖尿病、心律、心衰出院后）的随访模板由哪位临床负责人确认？','Which clinician signs off the first program templates (HTN, diabetes, cardiac rhythm, HF post-discharge)?')}</li>
+  </ol>
+ </section>
+ </article></div></div>`;
+}
+
+/* ---------- CLINIC ---------- */
+function riskChip(r){return `<span class="chip ${r}"><span class="dotc"></span>${T(RISK[r])}</span>`}
+function devIcons(dv){return dv.map(d=>`<span class="chip" title="${T(DV[d])}">${T(DV[d])}</span>`).join(' ')}
+function clinic(){
+ const openA=A.filter(a=>a.st==='open').length;
+ const NAV={
+  clinic:[['dash','home',L('工作台','Dashboard')],['patients','users',L('患者管理','Patients')],['fu','cal',L('随访管理','Follow-ups')],['alerts','bell',L('告警中心','Alerts'),openA],['hsg','report',L('Healthier SG','Healthier SG')],['plans','card',L('监测计划','Care plans')],['devices','dev',L('设备管理','Devices')],['settle','report',L('服务费结算','Service fees')],['reports','chart',L('报表','Reports')],['integr','dev',L('系统集成','Integrations')],['settings','gear',L('系统设置','Settings')]],
+  screen:[['scr','flask',L('检查单','Check orders')],['plans','card',L('转长期计划','Ongoing plans')],['devices','dev',L('传感器库存','Sensor stock')],['settle','report',L('采购对账','Purchase statement')]],
+  ops:[['nurse','nurse',L('集中审阅','Central review'),9],['orgs','users',L('合作机构','Partners')],['channels','share',L('渠道与佣金','Channels & commissions')],['catalog','card',L('计划与定价','Plans & pricing')],['billing','chart',L('订阅与收款','Subscriptions')],['models','dev',L('设备型号库','Device models')],['integr','dev',L('系统集成','Integrations')]],
+  partner:[['pstats','chart',L('我的推荐','My referrals')],['pkit','share',L('推广物料','Referral kit')],['ppay','card',L('佣金结算','Payouts')]]};
+ const navs=NAV[S.org];
+ if(!navs.some(n=>n[0]===S.cv)&&!(S.org==='clinic'&&S.cv==='patient'))S.cv=navs[0][0];
+ const cur=S.cv==='patient'?'patients':S.cv;
+ const V={dash:cDash,patients:cPatients,patient:cPatient,fu:cFu,alerts:cAlerts,devices:cDevices,integr:cIntegr,reports:cReports,plans:cPlans,settle:cSettle,scr:cScreen,nurse:cNurse,orgs:cOrgs,catalog:cCatalog,channels:cChannels,hsg:cHsg,settings:cSettings,models:cModels,pstats:cPStats,pkit:cPKit,ppay:cPPay,billing:cBilling};
+ const body=V[S.cv]();
+ const ORG={clinic:[L('海湾家庭诊所','Bayview Family Clinic'),L('陈护士 · 健康管理师','Nurse Chen · Care manager'),'rpm.example.sg/clinic'],screen:[L('明德健康体检中心','Mingde Health Screening'),L('Grace · 客户服务主管','Grace · Client services lead'),'rpm.example.sg/screening'],ops:[L('平台运营中心','Platform operations'),L('Siti · 当班护士组长','Siti · Duty nurse lead'),'rpm.example.sg/ops'],partner:[L('安心保险代理团队','Anxin insurance agency'),L('渠道合作方 · 只读','Channel partner · read-only'),'partners.rpm.example.sg']}[S.org];
+ const osw=(k,zh,en)=>`<button data-act="org" data-v="${k}" aria-pressed="${S.org===k}">${L(zh,en)}</button>`;
+ return `<div class="wrap"><div class="frame">
+  <div class="frame-bar"><i></i><i></i><i></i><span class="url">${ORG[2]}</span><span style="margin-left:auto" class="example">${L('示例数据','Sample data')}</span></div>
+  <div class="portal"><aside class="side"><div class="orgsw" role="group" aria-label="portal">${osw('clinic','诊所','Clinic')}${osw('screen','体检中心','Screening')}${osw('ops','平台运营','Operations')}${osw('partner','渠道合作方','Partner')}</div><div class="org"><b>${ORG[0]}</b>${ORG[1]}</div>
+   ${navs.map(([k,i,l,c])=>`<button class="nav" data-act="cv" data-v="${k}" ${cur===k?'aria-current="page"':''}>${ic(i)}${l}${c?`<span class="cnt">${c}</span>`:''}</button>`).join('')}
+  </aside><main class="pmain">${body}</main></div></div></div>`;
+}
+function alertRows(list,compact){
+ return list.map(a=>{const p=pById(a.pid);return `<tr>
+  <td><span class="sev ${a.lv}"></span><span class="pname">${T(p.n)}</span><div class="sub">${p.age} · ${T(p.sx)} · ${p.id}</div></td>
+  <td><b>${T(a.t)}</b><div class="sub num">${T(a.v)}</div></td>
+  <td class="sub">${T(DV[a.src])}<br><span class="num">${T(a.at)}</span></td>
+  <td style="white-space:nowrap">${a.st==='open'?`<button class="btn sm" data-act="ack" data-v="${a.id}">${L('处理','Resolve')}</button> <button class="btn sm pri" data-act="a2f" data-v="${a.id}">${L('转随访','To follow-up')}</button>`:`<span class="chip ok">${a.st==='fu'?L('已建随访','Follow-up created'):L('已处理','Resolved')}</span>`}</td></tr>`}).join('');
+}
+function cDash(){
+ const open=A.filter(a=>a.st==='open');
+ const today=F.filter(f=>f.col==='today'||f.col==='over');
+ return `<div class="phead"><h2>${L('早上好，陈护士','Good morning, Nurse Chen')}</h2><span class="sub">${L('2026年10月1日 星期四','Thursday, Oct 1, 2026')}</span></div>
+ <div class="kpis">
+  <div class="kpi"><small>${L('在管患者','Active patients')}</small><div class="v">128</div><div class="d">${L('本周新入组 6','+6 enrolled this week')}</div></div>
+  <div class="kpi"><small>${L('未处理告警','Open alerts')}</small><div class="v" style="color:var(--crit)">${open.length}</div><div class="d">${L(`紧急 ${open.filter(a=>a.lv==='crit').length}`,`${open.filter(a=>a.lv==='crit').length} critical`)}</div></div>
+  <div class="kpi"><small>${L('今日 / 逾期随访','Due today / overdue')}</small><div class="v">${F.filter(f=>f.col==='today').length}<span style="color:var(--muted)"> / </span><span style="color:var(--crit)">${F.filter(f=>f.col==='over').length}</span></div><div class="d">${L('本月完成率 91%','91% done this month')}</div></div>
+  <div class="kpi"><small>${L('7 日数据上传率','7-day upload rate')}</small><div class="v">86%</div><div class="d">${L('无数据 >72h：4 人','4 silent >72 h')}</div></div>
+ </div>
+ <div class="panel"><div class="panel-b" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 16px"><b>Healthier SG</b><span class="sub">${L('慢病固定付费达标 112/146 · 指标包完成 64/146 · 9 人第二次复诊窗口即将关闭','Fixed pay met 112/146 · bundle done 64/146 · 9 patients’ 2nd-consult window closing')}</span><button class="btn sm" style="margin-left:auto" data-act="cv" data-v="hsg">${L('查看缺口','See gaps')}</button></div></div>
+ <div class="grid2">
+  <div class="panel"><div class="panel-h"><h3>${L('待处理告警','Open alerts')}</h3><button class="btn sm" data-act="cv" data-v="alerts">${L('全部','View all')}</button></div>
+   <div class="tbl-wrap"><table><tbody>${alertRows(open.slice(0,5))||`<tr><td class="sub">${L('没有待处理告警','No open alerts')}</td></tr>`}</tbody></table></div></div>
+  <div class="panel"><div class="panel-h"><h3>${L('今日随访','Today’s follow-ups')}</h3><button class="btn sm" data-act="cv" data-v="fu">${L('看板','Board')}</button></div>
+   <div class="panel-b" style="display:flex;flex-direction:column;gap:8px">${today.map(fuCard).join('')}</div></div>
+ </div>`;
+}
+function cPatients(){
+ return `<div class="phead"><h2>${L('患者管理','Patients')}</h2><button class="btn">${L('批量导入','Import')}</button><button class="btn pri" data-act="newpt">${L('+ 新建患者','+ New patient')}</button></div>
+ <div class="filters"><input class="input" id="q" placeholder="${L('搜索姓名、手机号、NRIC 后四位','Search name, mobile, NRIC last 4')}" style="width:240px">
+  <select class="input" id="f1"><option>${L('全部项目','All programs')}</option><option>${L('高血压管理','HTN program')}</option><option>${L('CGM 管理','CGM program')}</option><option>${L('心律监测','Cardiac rhythm')}</option></select>
+  <select class="input" id="f2"><option>${L('全部风险','All risk')}</option><option>${L('高风险','High risk')}</option><option>${L('需关注','Watch')}</option></select>
+  <select class="input" id="f3"><option>${L('我负责的','My patients')}</option><option>${L('全科室','Whole department')}</option></select></div>
+ <div class="panel"><div class="tbl-wrap"><table>
+  <thead><tr><th>${L('患者','Patient')}</th><th>${L('风险','Risk')}</th><th>${L('诊断 / 项目','Diagnosis / program')}</th><th>${L('设备','Devices')}</th><th>${L('最近上传','Last upload')}</th><th>${L('7 日依从性','7-day adherence')}</th><th>${L('下次随访','Next follow-up')}</th><th>${L('照护团队','Care team')}</th></tr></thead>
+  <tbody>${P.map(p=>`<tr class="click" data-act="pt" data-v="${p.id}" tabindex="0">
+   <td><span class="pname">${T(p.n)}</span><div class="sub">${p.age} · ${T(p.sx)} · ${p.id}</div></td>
+   <td>${riskChip(p.risk)}</td>
+   <td>${p.cond.map(T).join('、')}<div class="sub">${T(p.prog)} · ${L(`第 ${p.day} 天`,`Day ${p.day}`)}</div></td>
+   <td style="max-width:200px">${devIcons(p.dv)}</td>
+   <td class="sub ${p.last[0].includes('3 天')?'s crit':''}">${T(p.last)}</td>
+   <td class="num"><span class="bar"><i style="width:${p.adh}%;${p.adh<60?'background:var(--crit)':''}"></i></span>${p.adh}%</td>
+   <td class="${T(p.next).match(/逾期|Overdue/)?'s crit':''}">${T(p.next)}</td>
+   <td class="sub">${T(p.team)}</td></tr>`).join('')}</tbody></table></div></div>`;
+}
+function cPatient(){
+ const p=pById(S.pid);
+ const tabs=[['overview',L('概览','Overview')],['bp',L('血压','Blood pressure')],['cgm',L('血糖 CGM','Glucose CGM')],['ecg',L('心电','ECG')],['fu',L('随访记录','Follow-ups')],['devices',L('设备与阈值','Devices & thresholds')],['plan',L('计划与账单','Plan & billing')],['profile',L('档案','Profile')]];
+ let b='';
+ const bpPanel=`<div class="panel"><div class="panel-h"><h3>${L('血压 · 近 14 天','Blood pressure · 14 days')}</h3><div class="legend"><span><i style="background:var(--sys)"></i>${L('收缩压','Systolic')}</span><span><i style="background:var(--dia)"></i>${L('舒张压','Diastolic')}</span></div></div><div class="panel-b">${bpChart(560,200)}<div class="sub">${L('平均 154/94 mmHg · 达标率 21%（目标 <140/90）','Mean 154/94 mmHg · 21% at goal (<140/90)')}</div></div></div>`;
+ const cgmPanel=`<div class="panel"><div class="panel-h"><h3>${L('CGM · 今天','CGM · Today')}</h3><span class="chip acc">Sinocare</span></div><div class="panel-b" style="display:flex;flex-direction:column;gap:10px">${cgmChart(560,190)}<div><div class="sub" style="margin-bottom:4px">${L('目标范围内时间 TIR（近 14 天，mmol/L）','Time in range, 14 days (mmol/L)')}</div>${tirBar()}</div><div class="sub">GMI 7.1% · CV 32% · ${L('传感器佩戴 96%','Sensor wear 96%')}</div></div></div>`;
+ const ecgPanel=(af)=>`<div class="panel"><div class="panel-h"><h3>${L('心电 · 30 秒记录（显示前 6 秒）','ECG · 30 s record (first 6 s)')}</h3><span class="chip ${af?'warn':'ok'}">${af?L('待医生判读','Awaiting doctor review'):L('医生已判读：窦性心律','Doctor reviewed: sinus rhythm')}</span></div><div class="panel-b">${ecgStrip(600,150,af)}<div class="sub" style="margin-top:6px">${af?L('平均心率 96 bpm · 信号质量：良好 · 待医生复核','Avg HR 96 bpm · signal quality: good · awaiting doctor review'):L('平均心率 74 bpm · 信号质量：良好','Avg HR 74 bpm · signal quality: good')}</div><div class="sub" style="margin-top:2px">${L('来源：心电卡 MD100C（HSA Class B 注册中）。30 秒 · 250 Hz · 单导联。厂商协议 v1.0.0 尚无房颤结果字段，所以每条记录都进入医生判读队列，平台不做自动判读。','Source: ECG card MD100C (HSA Class B pending). 30 s · 250 Hz · single lead. Vendor protocol v1.0.0 has no AF result field yet, so every record goes to the doctor review queue; the platform does not auto-interpret.')}</div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn sm pri" data-act="toast" data-v="${L('已标记为已复核','Marked as reviewed')}">${L('标记已复核','Mark reviewed')}</button><button class="btn sm">${L('查看 SDK 报告 (PDF)','Open SDK report (PDF)')}</button><button class="btn sm" data-act="fu" data-v="new">${L('转随访','To follow-up')}</button></div></div></div>`;
+ const vit=`<div class="vitals">
+  <div class="vital"><small>${L('血压','BP')}</small><span class="v s crit">172/104<u>mmHg</u></span><span class="src">${L('血压计 · 08:14','BP monitor · 08:14')}</span></div>
+  <div class="vital"><small>${L('血糖','Glucose')}</small><span class="v">7.4<u>mmol/L →</u></span><span class="src">Sinocare CGM · 5 min</span></div>
+  <div class="vital"><small>${L('静息心率','Resting HR')}</small><span class="v">72<u>bpm</u></span><span class="src">${L('手环 · 今晨','Band · this morning')}</span></div>
+  <div class="vital"><small>${L('血氧','SpO₂')}</small><span class="v">96<u>%</u></span><span class="src">${L('手环 · 夜间均值','Band · overnight mean')}</span></div>
+  <div class="vital"><small>${L('睡眠 / 步数','Sleep / steps')}</small><span class="v">6:42<u>h</u></span><span class="src">${L('昨日 4,812 步','4,812 steps yesterday')}</span></div></div>`;
+ const fuTimeline=`<div class="panel"><div class="panel-h"><h3>${L('随访时间线','Follow-up timeline')}</h3><button class="btn sm pri" data-act="fu" data-v="new">${L('+ 新建随访','+ New follow-up')}</button></div><div class="panel-b"><ul class="timeline">
+  ${F.filter(f=>f.pid===p.id&&f.col!=='done').map(f=>`<li><span class="t">${T(f.due)}</span><span class="rail"></span><div class="c"><b>${T(f.what)}</b><div class="row" style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip">${T(HOW[f.how])}</span><span class="chip info">${T(f.why)}</span><span class="sub">${T(f.owner)}</span></div><div><button class="btn sm" data-act="fu" data-v="${f.id}">${L('开始随访','Start')}</button></div></div></li>`).join('')}
+  <li><span class="t">${L('9月30日','Sep 30')}</span><span class="rail"></span><div class="c"><b>${L('月度电话随访 · 已完成','Monthly phone call · done')}</b><span class="sub">${L('自述偶有头晕；漏服氨氯地平 2 次。处理：健康教育，开启服药提醒。','Occasional dizziness; missed amlodipine twice. Action: education, med reminder on.')}</span><span class="sub">${L('陈护士','Nurse Chen')}</span></div></li>
+  <li><span class="t">${L('9月1日','Sep 1')}</span><span class="rail"></span><div class="c"><b>${L('门诊复诊 · 已完成','Clinic visit · done')}</b><span class="sub">${L('HbA1c 7.4%。调整：二甲双胍 0.5g → 1.0g bid。下次 CGM 复盘 9 月中旬。','HbA1c 7.4%. Metformin 0.5 g → 1.0 g bid. CGM review mid-Sep.')}</span><span class="sub">${L('李医生','Dr. Li')}</span></div></li>
+  <li><span class="t">${L('8月17日','Aug 17')}</span><span class="rail"></span><div class="c"><b>${L('入组 · 高血压 + CGM 管理','Enrolled · HTN + CGM program')}</b><span class="sub">${L('签署知情同意；发放血压计、手环；完成 Sinocare 授权。','Consent signed; BP monitor and band issued; Sinocare linked.')}</span></div></li>
+ </ul></div></div>`;
+ if(S.ptab==='overview')b=`${vit}<div class="grid2">${bpPanel}${cgmPanel}</div>${fuTimeline}`;
+ else if(S.ptab==='bp')b=`${bpPanel}<div class="panel"><div class="tbl-wrap"><table><thead><tr><th>${L('时间','Time')}</th><th>${L('收缩压/舒张压','SYS/DIA')}</th><th>${L('脉率','Pulse')}</th><th>${L('来源','Source')}</th><th>${L('标签','Tags')}</th></tr></thead><tbody>
+  ${[['10/1 08:14','172/104',78,'crit',L('晨起','Morning')],['9/30 20:31','163/99',74,'warn',L('睡前','Bedtime')],['9/30 07:50','151/92',70,'',L('晨起','Morning')],['9/29 20:02','158/97',73,'',L('睡前','Bedtime')]].map(r=>`<tr><td class="num">${r[0]}</td><td class="num s ${r[3]}">${r[1]}</td><td class="num">${r[2]}</td><td>${L('血压计','BP monitor')}</td><td><span class="chip">${r[4]}</span></td></tr>`).join('')}</tbody></table></div></div>`;
+ else if(S.ptab==='cgm')b=cgmPanel;
+ else if(S.ptab==='ecg')b=ecgPanel(p.id==='P1031');
+ else if(S.ptab==='fu')b=fuTimeline;
+ else if(S.ptab==='devices')b=`<div class="grid2"><div class="panel"><div class="panel-h"><h3>${L('已绑定设备','Bound devices')}</h3><button class="btn sm">${L('+ 绑定','+ Bind')}</button></div><div class="tbl-wrap"><table><thead><tr><th>${L('设备','Device')}</th><th>${L('序列号','Serial')}</th><th>${L('最后同步','Last sync')}</th><th>${L('电量','Battery')}</th></tr></thead><tbody>
+  ${p.dv.map((d,i)=>`<tr><td>${T(DV[d])}</td><td class="num">${d==='cgm'?L('API 授权','API link'):'SN-'+(41820+i*37)}</td><td class="sub">${d==='cgm'?L('5 分钟前','5 min ago'):L('12 分钟前','12 min ago')}</td><td class="num">${d==='cgm'?L('传感器第 9 天','Sensor day 9'):(80-i*23)+'%'}</td></tr>`).join('')}</tbody></table></div></div>
+  <div class="panel"><div class="panel-h"><h3>${L('个性化阈值','Patient thresholds')}</h3><button class="btn sm" data-act="toast" data-v="${L('阈值已保存','Thresholds saved')}">${L('保存','Save')}</button></div><div class="panel-b"><div class="tbl-wrap"><table><thead><tr><th>${L('指标','Metric')}</th><th>${L('紧急','Critical')}</th><th>${L('关注','Watch')}</th><th>${L('通知','Notify')}</th></tr></thead><tbody>
+  <tr><td>${L('收缩压','Systolic')}</td><td class="num">≥ 180</td><td class="num">≥ 160</td><td>${L('推送 + 短信','Push + SMS')}</td></tr>
+  <tr><td>${L('舒张压','Diastolic')}</td><td class="num">≥ 110</td><td class="num">≥ 100</td><td>${L('推送 + 短信','Push + SMS')}</td></tr>
+  <tr><td>${L('血糖','Glucose')}</td><td class="num">&lt; 3.0 · &gt; 16.7</td><td class="num">&lt; 3.9 · &gt; 13.9</td><td>${L('推送','Push')}</td></tr>
+  <tr><td>${L('测量目标','Measure goal')}</td><td colspan="2">${L('血压每天 2 次，每周 14 次','BP 2/day, 14/week')}</td><td>${L('未达标通知','Unmet goal')}</td></tr></tbody></table></div></div></div></div>`;
+ else if(S.ptab==='plan'){const sb=SUB.find(x=>x.pid===p.id),pl=sb&&plById(sb.pl);
+  b=sb?`<div class="grid2"><div class="panel"><div class="panel-h"><h3>${T(pl.n)}</h3><span class="chip ${sb.st}">${T(SUBST[sb.st])}</span></div><div class="panel-b" style="display:flex;flex-direction:column;gap:10px">
+   <div class="split"><div><span>${L('开始','Started')}</span><span class="num">${T(sb.since)}</span></div><div><span>${L('下次扣款','Next charge')}</span><span class="num">${T(sb.next)}</span></div><div><span>${L('日常审阅','Daily review')}</span><span>${T(REV[sb.rev])}</span></div><div><span>${L('月费','Monthly fee')}</span><span class="num">${money(pl.pr)}</span></div><div><span>${L('其中诊所临床服务费','of which clinic service fee')}</span><span class="num">${money(pl.fee[sb.rev==='clinic'?1:0])}</span></div></div>
+   <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-act="rx" data-v="${p.id}">${L('变更计划','Change plan')}</button><button class="btn sm">${L('暂停','Pause')}</button></div></div></div>
+   <div class="panel"><div class="panel-h"><h3>${L('账单记录','Billing history')}</h3></div><div class="tbl-wrap"><table><tbody>
+   ${[['10/1','PayNow','ok',L('已支付','Paid')],['9/1','PayNow','ok',L('已支付','Paid')],['8/17',L('信用卡','Card'),'ok',L('已支付（含首月）','Paid (first month)')]].map(r=>`<tr><td class="num">${r[0]}</td><td class="num">${money(pl.pr)}</td><td>${r[1]}</td><td><span class="chip ${r[2]}">${r[3]}</span></td></tr>`).join('')}</tbody></table></div></div></div>
+   <p class="sub">${L('传感器配送：下一批 2 个 Sinocare 传感器 10 月 5 日寄出。','Sensor delivery: next 2 Sinocare sensors ship Oct 5.')}</p>`
+  :`<div class="panel"><div class="panel-b"><span class="sub">${L('还没有监测计划。','No care plan yet.')}</span><div><button class="btn pri sm" data-act="rx" data-v="${p.id}">${L('+ 开计划','+ Start a plan')}</button></div></div></div>`;}
+ else b=`<div class="panel"><div class="panel-b"><div class="modal" style="box-shadow:none;width:100%"><div class="mb" style="padding:0">
+  ${[[L('姓名','Name'),T(p.n)],[L('性别 / 年龄','Sex / age'),`${T(p.sx)} / ${p.age}`],[L('手机号','Mobile'),'+65 9*** 6621'],[L('NRIC/FIN','NRIC/FIN'),'S****621A'],[L('诊所病历号','Clinic ID'),'BFC-0049217'],[L('诊断','Diagnoses'),p.cond.map(T).join('、')],[L('管理项目','Program'),T(p.prog)],[L('照护团队','Care team'),T(p.team)],[L('紧急联系人','Emergency contact'),L('陈丽玲（女儿）','Tan Li Ling (daughter)')],[L('获客渠道','Acquisition channel'),L('安心保险代理团队 · AX-021（2026-08-15）','Anxin insurance agency · AX-021 (2026-08-15)')],[L('照护诊所','Care clinic'),L('海湾家庭诊所','Bayview Family Clinic')],[L('知情同意','Consent'),L('已签署 2026-08-17','Signed 2026-08-17')],[L('偏好语言','Language'),L('中文','Chinese')],[L('Plato 同步','Plato sync'),L('未连接（已预留）','Not connected (reserved)')],[L('PDPA 同意','PDPA consent'),L('已同意 2026-08-17','Given 2026-08-17')]].map(([k,v])=>`<div class="field"><span>${k}</span><b style="font-weight:500">${v}</b></div>`).join('')}
+ </div></div></div></div>`;
+ return `<div class="phead"><button class="btn sm" data-act="cv" data-v="patients">← ${L('患者列表','Patients')}</button></div>
+ <div class="ptitle"><span class="avatar">${T(p.n).slice(0,1)}</span><div class="meta"><b>${T(p.n)}</b><span class="sub">${T(p.sx)} · ${p.age} · ${p.id} · ${p.cond.map(T).join('、')} · ${T(p.prog)} · ${L(`第 ${p.day} 天`,`Day ${p.day}`)}</span></div>${riskChip(p.risk)}<button class="btn" data-act="app" data-v="msg">${L('发消息','Message')}</button><button class="btn" data-act="rx" data-v="${p.id}">${L('开计划','Start plan')}</button><button class="btn pri" data-act="fu" data-v="new">${L('+ 随访','+ Follow-up')}</button></div>
+ <div class="ptabs" role="tablist">${tabs.map(([k,l])=>`<button role="tab" data-act="ptab" data-v="${k}" aria-selected="${S.ptab===k}">${l}</button>`).join('')}</div>${b}`;
+}
+function fuCard(f){const p=pById(f.pid);const col=COLS.find(c=>c[0]===f.col);
+ return `<button class="card" data-act="fu" data-v="${f.id}"><div class="row"><span class="who">${T(p.n)}</span><span class="chip ${col[2]}">${T(f.due)}</span></div><div>${T(f.what)}</div><div class="row"><span class="chip">${T(HOW[f.how])}</span><span class="chip info">${T(f.why)}</span><span class="sub">${T(f.owner)}</span></div>${f.res?`<div class="sub">✓ ${T(f.res)}</div>`:''}</button>`}
+function cFu(){
+ return `<div class="phead"><h2>${L('随访管理','Follow-ups')}</h2><div class="seg"><button aria-pressed="true">${L('看板','Board')}</button><button>${L('日历','Calendar')}</button><button>${L('列表','List')}</button></div><button class="btn pri" data-act="fu" data-v="new">${L('+ 新建随访','+ New follow-up')}</button></div>
+ <div class="kanban">${COLS.map(([k,l,c])=>{const items=F.filter(f=>f.col===k);return `<div class="kcol"><h4><span class="chip ${c}"><span class="dotc"></span>${T(l)}</span><span class="num">${items.length}</span></h4>${items.map(fuCard).join('')||`<span class="sub">${L('暂无','None')}</span>`}</div>`}).join('')}</div>
+ <h3 style="font-size:15px;margin-top:8px">${L('随访计划模板','Follow-up plan templates')}</h3>
+ <div class="tpl">
+  ${[[L('高血压管理','HTN program'),L('6 个月','6 months'),[L('入组第 7 天 · 电话','Day 7 · phone'),L('每月 · 电话 + 问卷','Monthly · phone + survey'),L('第 3、6 月 · 门诊','Months 3, 6 · clinic')],42],
+     [L('CGM 管理','CGM program'),L('每个传感器周期','Per sensor cycle'),[L('佩戴第 3 天 · 视频（教学）','Day 3 · video (coaching)'),L('周期结束 · TIR 复盘','Cycle end · TIR review'),L('每季度 · HbA1c','Quarterly · HbA1c')],27],
+     [L('心衰出院后','HF post-discharge'),L('30 天','30 days'),[L('第 2 天 · 电话','Day 2 · phone'),L('第 7、14 天 · 电话','Days 7, 14 · phone'),L('第 30 天 · 门诊','Day 30 · clinic')],11]].map(([n,d,steps,c])=>`<div class="panel"><div class="panel-h"><h3>${n}</h3><span class="sub">${L(`${c} 人使用`,`${c} patients`)}</span></div><div class="panel-b"><span class="sub">${L('周期','Length')}: ${d}</span><ol>${steps.map(s=>`<li>${s}</li>`).join('')}</ol><div><button class="btn sm">${L('编辑模板','Edit template')}</button></div></div></div>`).join('')}
+ </div>`;
+}
+function cAlerts(){
+ return `<div class="phead"><h2>${L('告警中心','Alerts')}</h2><div class="seg"><button aria-pressed="true">${L('待处理','Open')}</button><button>${L('已处理','Resolved')}</button><button>${L('全部','All')}</button></div></div>
+ <div class="panel"><div class="tbl-wrap"><table><thead><tr><th>${L('患者','Patient')}</th><th>${L('告警','Alert')}</th><th>${L('来源 / 时间','Source / time')}</th><th>${L('操作','Action')}</th></tr></thead><tbody>${alertRows(A)}</tbody></table></div></div>
+ <p class="sub">${L('紧急告警 15 分钟未认领将自动升级给责任医生。“转随访”会创建一条当天随访任务并带入告警数据。','Critical alerts escalate to the doctor after 15 min unclaimed. "To follow-up" creates a same-day task with the alert attached.')}</p>`;
+}
+function cDevices(){
+ const rows=[['SN-41820',L('血压计','BP monitor'),'BP-200','ok',L('使用中','In use'),'P1024'],['SN-41857',L('智能手环','Smart band'),'HBand Band','ok',L('使用中','In use'),'P1024'],['SN-52011',L('心电卡','ECG card'),'MD100C','ok',L('使用中','In use'),'P1031'],['SN-60233',L('智能戒指','Smart ring'),'HBand Ring','warn',L('电量低 12%','Battery 12%'),'P1003'],['SN-41902',L('血压计','BP monitor'),'BP-200','crit',L('3 天未同步','No sync 3 days'),'P1045'],['SN-41915',L('血压计','BP monitor'),'BP-200','',L('库存','In stock'),null],['SN-60240',L('智能戒指','Smart ring'),'HBand Ring','',L('库存','In stock'),null]];
+ return `<div class="phead"><h2>${L('设备管理','Devices')}</h2><button class="btn">${L('导入设备','Import')}</button><button class="btn pri">${L('+ 入库','+ Add stock')}</button></div>
+ <div class="panel"><div class="tbl-wrap"><table><thead><tr><th>${L('序列号','Serial')}</th><th>${L('类型','Type')}</th><th>${L('型号','Model')}</th><th>${L('状态','Status')}</th><th>${L('绑定患者','Patient')}</th></tr></thead><tbody>
+ ${rows.map(r=>`<tr><td class="num">${r[0]}</td><td>${r[1]}</td><td class="num">${r[2]}</td><td><span class="chip ${r[3]}">${r[4]}</span></td><td>${r[5]?`<a href="#" data-act="pt" data-v="${r[5]}" style="color:var(--accent)">${T(pById(r[5]).n)}</a>`:`<button class="btn sm">${L('发放给患者','Issue')}</button>`}</td></tr>`).join('')}</tbody></table></div></div>
+ <p class="sub">${L('型号为占位，待选型后替换。Sinocare CGM 通过 API 授权接入，不进入设备库存。','Model names are placeholders until devices are chosen. Sinocare CGM connects by API authorization and is not tracked as inventory.')}</p>`;
+}
+function cIntegr(){
+ const it=[[L('Plato（诊所 CMS）','Plato (clinic CMS)'),'',L('未连接 · 已预留','Not connected · reserved'),L('填写诊所数据库名 {db} 和 API key（Bearer）。同步患者与预约（webhook），随访记录和 PDF 报告写入病历备注，紧急告警建 Plato 任务。','Enter the clinic database name {db} and API key (Bearer). Syncs patients and appointments (webhooks), writes follow-up notes and PDF reports as case notes, creates Plato tasks for critical alerts.'),L('填写 API key','Enter API key')],
+  ['Sinocare CGM','warn',L('接口待定','Interface pending'),L('模式：推送 (webhook) 或定时拉取，待 Sinocare 确认。App 端 API 已可用于实时显示。','Mode: push (webhook) or polling, pending Sinocare. In-app API already used for live readings.'),L('选择模式','Choose mode')],
+  [L('心电卡 MD100C','ECG card MD100C'),'warn',L('房颤字段待提供','AF field pending'),L('协议 v1.0.0 已到：波形、心率、血氧可接入。房颤风险字段在协议中为保留，等厂商提供后启用自动告警。','Protocol v1.0.0 received: waveform, HR and SpO₂ can be integrated. The AF risk field is reserved in the protocol; auto alerts turn on once the vendor defines it.'),L('查看','View')],
+  [L('HBand 戒指 / 手环','HBand ring / band'),'warn',L('型号待定','Models pending'),L('通过设备能力表适配：型号确定后登记支持的指标即可。','Mapped through the device capability table; register supported metrics once models are chosen.'),L('能力表','Capability table')],
+  ['Singpass','',L('P1 · 未启用','P1 · off'),L('患者用 Singpass 登录并通过 Myinfo 预填资料。','Patients log in with Singpass and prefill details via Myinfo.'),L('了解','Details')],
+  ['NEHR','',L('待评估','To assess'),L('国家电子健康记录，视诊所需求评估。','National Electronic Health Record; assess per clinic need.'),L('了解','Details')]];
+ return `<div class="phead"><h2>${L('系统集成','Integrations')}</h2><span class="sub">${L('管理员可见','Admins only')}</span></div>
+ <div class="tpl">${it.map(([n,c,st,d,b])=>`<div class="panel"><div class="panel-h"><h3>${n}</h3><span class="chip ${c}">${st}</span></div><div class="panel-b"><span class="sub">${d}</span><div><button class="btn sm">${b}</button></div></div></div>`).join('')}</div>`;
+}
+function cReports(){
+ const rows=[[L('7 日数据上传率','7-day upload rate'),'86%','82%'],[L('告警平均响应时间','Mean alert response'),L('11 分钟','11 min'),L('18 分钟','18 min')],[L('随访按时完成率','On-time follow-up rate'),'91%','84%'],[L('失访率','Lost to follow-up'),'2.3%','3.9%'],[L('血压达标率','BP at goal'),'58%','51%'],[L('CGM TIR ≥70% 患者占比','Patients with TIR ≥70%'),'63%','55%']];
+ return `<div class="phead"><h2>${L('报表','Reports')}</h2><select class="input" id="rp"><option>${L('2026 年 9 月','Sep 2026')}</option></select><button class="btn">${L('导出 Excel','Export Excel')}</button></div>
+ <div class="panel"><div class="tbl-wrap"><table><thead><tr><th>${L('指标','Metric')}</th><th>${L('本月','This month')}</th><th>${L('上月','Last month')}</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r[0]}</td><td class="num"><b>${r[1]}</b></td><td class="num sub">${r[2]}</td></tr>`).join('')}</tbody></table></div></div>`;
+}
+
+
+function planCard(pl,btn){return `<div class="plan"><div style="display:flex;gap:8px;align-items:center"><b>${T(pl.n)}</b>${pl.once?`<span class="chip info" style="margin-left:auto">${L('单次','One-off')}</span>`:''}</div>
+ <div class="pr">${money(pl.pr)}<small>${pl.once?L(' / 次',' / check'):L(' / 月',' / month')}</small></div>
+ <ul>${pl.inc.map(i=>`<li>${T(i)}</li>`).join('')}</ul>${btn||''}</div>`}
+function cPlans(){
+ if(S.org==='screen')return `<div class="phead"><h2>${L('转为长期计划','Convert to ongoing plans')}</h2>${EG()}</div>
+  <p class="sub">${L('14 天检查结束后，报告页会推荐合适的长期计划。客户可以选择体检中心的合作 GP 继续管理，也可以回自己的家庭医生。','After the 14-day check, the report suggests an ongoing plan. Clients can continue with the centre’s partner GP or their own family doctor.')}</p>
+  <div class="plans">${PL.filter(x=>!x.once).map(x=>planCard(x)).join('')}</div>
+  <div class="panel"><div class="panel-h"><h3>${L('本月转化','Conversions this month')}</h3></div><div class="tbl-wrap"><table><thead><tr><th>${L('客户','Client')}</th><th>${L('检查结果','Check result')}</th><th>${L('选择的计划','Plan chosen')}</th><th>${L('接手的 GP','Receiving GP')}</th></tr></thead><tbody>
+  <tr><td>Ong Wei Ling</td><td>${L('TIR 61%，餐后峰值高','TIR 61%, high post-meal peaks')}</td><td>${L('血糖 CGM 计划','Glucose CGM plan')}</td><td>${L('海湾家庭诊所','Bayview Family Clinic')}</td></tr>
+  <tr><td>Marcus Lee</td><td>${L('空腹血糖受损','Impaired fasting glucose')}</td><td>${L('血压 + 血糖组合','BP + CGM combo')}</td><td>${L('自己的家庭医生','Own family doctor')}</td></tr></tbody></table></div></div>`;
+ const act=SUB.filter(x=>x.st!=='info').length;
+ return `<div class="phead"><h2>${L('监测计划','Care plans')}</h2>${EG()}<button class="btn pri" data-act="rx" data-v="P1061">${L('+ 为患者开计划','+ Start a plan')}</button></div>
+ <div class="kpis">
+  <div class="kpi"><small>${L('生效中的计划','Active plans')}</small><div class="v">${act+39}</div><div class="d">${L('本月新开 9','9 new this month')}</div></div>
+  <div class="kpi"><small>${L('待支付','Awaiting payment')}</small><div class="v" style="color:var(--warn)">${SUB.filter(x=>x.st==='info').length+2}</div><div class="d">${L('支付链接已发到 App','Pay link sent to app')}</div></div>
+  <div class="kpi"><small>${L('3 个月续用率','3-month retention')}</small><div class="v">84%</div><div class="d">${L('目标 ≥80%','Target ≥80%')}</div></div>
+  <div class="kpi"><small>${L('本月诊所服务费','Clinic service fees')}</small><div class="v">${money(1018)}</div><div class="d">${L('按实际提供的服务计','For services delivered')}</div></div>
+ </div>
+ <div class="panel"><div class="panel-h"><h3>${L('在订计划','Plans on file')}</h3><span class="sub">${L('护士审阅可由本诊所或平台集中护士负责','Review by your nurses or the central team')}</span></div><div class="tbl-wrap"><table><thead><tr><th>${L('患者','Patient')}</th><th>${L('计划','Plan')}</th><th>${L('状态','Status')}</th><th>${L('开始 / 下次扣款','Start / next charge')}</th><th>${L('日常审阅','Daily review')}</th></tr></thead><tbody>
+ ${SUB.map(x=>{const p=pById(x.pid),pl=plById(x.pl);return `<tr><td><a href="#" data-act="pt" data-v="${p.id}" style="color:var(--accent)" class="pname">${T(p.n)}</a><div class="sub">${p.id}</div></td><td>${T(pl.n)}<div class="sub num">${money(pl.pr)}${L(' / 月',' / mo')}</div></td><td><span class="chip ${x.st}">${T(SUBST[x.st])}</span>${x.note?`<div class="sub">${T(x.note)}</div>`:''}</td><td class="num">${T(x.since)} / ${T(x.next)}</td><td>${T(REV[x.rev])}</td></tr>`}).join('')}
+ </tbody></table></div></div>
+ <div class="panel"><div class="panel-h"><h3>${L('可开的计划（平台统一定价）','Plans you can start (platform pricing)')}</h3></div><div class="panel-b"><div class="plans">${PL.filter(x=>!x.once).map(x=>planCard(x,`<button class="btn sm" data-act="rx" data-v="${S.pid}" data-pl="${x.k}">${L('开此计划','Start this plan')}</button>`)).join('')}</div></div></div>`;
+}
+function cSettle(){
+ if(S.org==='screen')return `<div class="phead"><h2>${L('采购对账 · 2026 年 9 月','Purchase statement · Sep 2026')}</h2>${EG()}<button class="btn">${L('下载发票 PDF','Download invoice PDF')}</button></div>
+  <div class="panel"><div class="tbl-wrap"><table><thead><tr><th>${L('项目','Item')}</th><th>${L('数量','Qty')}</th><th>${L('批发单价','Unit price')}</th><th>${L('小计','Subtotal')}</th></tr></thead><tbody>
+  <tr><td>${L('14 天 CGM 代谢检查套装（传感器 + 报告）','14-day CGM check kit (sensor + report)')}</td><td class="num">42</td><td class="num">${money(120)}</td><td class="num">${money(5040)}</td></tr>
+  <tr><td>${L('心电卡筛查（按次）','ECG card screening (per test)')}</td><td class="num">65</td><td class="num">${money(15)}</td><td class="num">${money(975)}</td></tr>
+  <tr><td><b>${L('应付平台','Payable to platform')}</b></td><td></td><td></td><td class="num"><b>${money(6015)}</b></td></tr></tbody></table></div></div>
+  <p class="sub">${L('体检中心按批发价采购检查套装，自行定零售价打包进体检套餐。客户转为长期计划后，按月费与平台无关的部分不计入本单。','The centre buys kits at wholesale and sets its own retail price inside its packages. Ongoing plans that clients take up later are not on this statement.')}</p>`;
+ const rows=PL.filter(x=>!x.once).map((x,i)=>{const own=[14,3,6,9][i],plat=[9,6,4,3][i];return [x,own,plat,own*x.fee[1]+plat*x.fee[0]]});
+ const tot=rows.reduce((a,r)=>a+r[3],0);
+ return `<div class="phead"><h2>${L('诊所服务费结算 · 2026 年 9 月','Clinic service fees · Sep 2026')}</h2>${EG()}<button class="btn">${L('下载对账单 PDF','Download statement PDF')}</button></div>
+ <div class="callout">${L('<b>按服务计费，不按转介提成。</b>新加坡医疗理事会 (SMC) 道德准则不允许医生仅因转介病人或推荐产品而获得经济利益。所以诊所拿到的是固定的“临床服务费”：医生复核、告警处理、视频复诊这些诊所实际做了的工作。日常审阅由本诊所护士做时费率较高，交给平台集中护士时较低。费用在患者 App 的账单里逐项列明。',
+ '<b>Paid for services, not referrals.</b> The Singapore Medical Council (SMC) ethical code bars doctors from financial benefit solely for referring patients or prescribing products. So the clinic earns a fixed clinical service fee for work it actually does: doctor reviews, alert handling and video consults. The rate is higher when the clinic’s own nurses do daily review and lower when the central team does. Each fee is itemised on the patient’s bill in the app.')}</div>
+ <div class="panel"><div class="tbl-wrap"><table><thead><tr><th>${L('计划','Plan')}</th><th>${L('本诊所护士审阅（人·月）','Clinic-nurse review (patient-months)')}</th><th>${L('平台护士审阅（人·月）','Central-team review (patient-months)')}</th><th>${L('费率','Rates')}</th><th>${L('小计','Subtotal')}</th></tr></thead><tbody>
+ ${rows.map(([x,o,pl,sub])=>`<tr><td>${T(x.n)}</td><td class="num">${o}</td><td class="num">${pl}</td><td class="num sub">${money(x.fee[1])} / ${money(x.fee[0])}</td><td class="num">${money(sub)}</td></tr>`).join('')}
+ <tr><td><b>${L('应付诊所','Payable to clinic')}</b></td><td></td><td></td><td></td><td class="num"><b>${money(tot)}</b></td></tr></tbody></table></div></div>
+ <p class="sub">${L('视频复诊费由诊所按自己的价目在 Plato 收取，可用 CHAS 和 MediSave（CDMP 慢病），不经过本平台。','Video consult fees are charged by the clinic in Plato at its own rates and can use CHAS and MediSave (CDMP); they do not pass through this platform.')}</p>`;
+}
+function cScreen(){
+ const O=[['Ong Wei Ling',L('企业套餐 · A 公司','Corporate · Company A'),'check',4,L('已出报告','Report ready'),'ok'],['Marcus Lee',L('个人高级套餐','Premium individual'),'check',4,L('已转长期计划','Converted to plan'),'acc'],['Tan Mei Hui',L('企业套餐 · A 公司','Corporate · Company A'),'check',2,L('佩戴中 · 第 9 天','Wearing · day 9'),'info'],['Kumar S.',L('心脏筛查','Heart screening'),'ecg',3,L('待医生判读','Awaiting doctor review'),'warn'],['Chua Boon Hock',L('个人高级套餐','Premium individual'),'check',1,L('待佩戴','To fit'),''],['Aishah Rahman',L('企业套餐 · B 公司','Corporate · Company B'),'check',3,L('报告待出','Report pending'),'warn']];
+ const stg=n=>`<div class="stepper" style="width:90px">${[1,2,3,4].map(i=>`<i class="${i<=n?'on':''}"></i>`).join('')}</div>`;
+ return `<div class="phead"><h2>${L('检查单','Check orders')}</h2><button class="btn pri" data-act="toast" data-v="${L('新建检查单（示意）','New check order (illustrative)')}">${L('+ 新建检查单','+ New order')}</button></div>
+ <div class="kpis">
+  <div class="kpi"><small>${L('本月检查单','Orders this month')}</small><div class="v">107</div><div class="d">${L('CGM 42 · 心电 65','CGM 42 · ECG 65')}</div></div>
+  <div class="kpi"><small>${L('佩戴中','Wearing now')}</small><div class="v">18</div><div class="d">${L('今日到期 3','3 finish today')}</div></div>
+  <div class="kpi"><small>${L('待出报告','Reports pending')}</small><div class="v" style="color:var(--warn)">5</div><div class="d">${L('平均 1.5 天出报告','1.5 days on average')}</div></div>
+  <div class="kpi"><small>${L('转长期计划率','Converted to plans')}</small><div class="v">17%</div><div class="d">${L('试点目标 15%','Pilot target 15%')}</div></div>
+ </div>
+ <div class="grid2">
+ <div class="panel"><div class="panel-h"><h3>${L('进行中的检查','Checks in progress')}</h3><span class="sub">${L('下单 → 佩戴 → 报告 → 跟进','Order → wear → report → follow-up')}</span></div><div class="tbl-wrap"><table><thead><tr><th>${L('客户','Client')}</th><th>${L('项目','Test')}</th><th>${L('进度','Progress')}</th></tr></thead><tbody>
+ ${O.map(r=>`<tr><td><span class="pname">${r[0]}</span><div class="sub">${r[1]}</div></td><td>${r[2]==='check'?L('14 天 CGM','14-day CGM'):L('心电卡筛查','ECG screening')}</td><td>${stg(r[3])}<span class="chip ${r[5]}" style="margin-top:4px">${r[4]}</span></td></tr>`).join('')}</tbody></table></div></div>
+ <div class="panel"><div class="panel-h"><h3>${L('报告预览 · Ong Wei Ling','Report preview · Ong Wei Ling')}</h3><span class="chip acc">Sinocare</span></div><div class="panel-b" style="display:flex;flex-direction:column;gap:10px">${cgmChart(520,170)}
+  <div><div class="sub" style="margin-bottom:4px">${L('14 天目标范围内时间 (mmol/L)','14-day time in range (mmol/L)')}</div>${tirBar()}</div>
+  <div class="sub">${L('平均血糖 7.2 · GMI 6.9% · 午餐后峰值最高（平均 11.8）。建议：复查 HbA1c，考虑转为长期血糖计划。','Mean glucose 7.2 · GMI 6.9% · highest peaks after lunch (mean 11.8). Suggest: recheck HbA1c, consider an ongoing glucose plan.')}</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm pri" data-act="toast" data-v="${L('报告已发送到客户 App','Report sent to client app')}">${L('医生签发并发送','Sign and send')}</button><button class="btn sm" data-act="cv" data-v="plans">${L('推荐长期计划','Suggest a plan')}</button></div></div></div>
+ </div>`;
+}
+function cNurse(){
+ const Q=[['crit','P1007',L('海湾家庭诊所','Bayview Family Clinic'),L('夜间低血糖 3.1 mmol/L','Overnight low 3.1 mmol/L'),L('剩 6 分钟','6 min left')],['crit','P1024',L('海湾家庭诊所','Bayview Family Clinic'),L('血压 172/104','BP 172/104'),L('剩 11 分钟','11 min left')],['warn','P1031',L('海湾家庭诊所','Bayview Family Clinic'),L('新心电记录（转医生判读）','New ECG (route to doctor)'),L('今天内','Today')],['warn','P1045',L('海湾家庭诊所','Bayview Family Clinic'),L('72 小时无数据','No data 72 h'),L('今天内','Today')],['warn','X2210',L('狮城医疗 · 东海岸','Lion City Medical · East Coast'),L('血压均值连续 3 天 ≥150/95','Mean BP ≥150/95 for 3 days'),L('今天内','Today')],['info','X3381',L('明德体检中心','Mingde Screening'),L('14 天检查结束，报告待出','14-day check done, report due'),L('明天','Tomorrow')]];
+ return `<div class="phead"><h2>${L('集中审阅工作台','Central review console')}</h2><span class="sub">${L('平台护士团队 · 当班 3 人 · 在管 412 名患者 · 9 家机构','Central nurses · 3 on duty · 412 patients · 9 partners')}</span></div>
+ <div class="kpis">
+  <div class="kpi"><small>${L('待处理','Open items')}</small><div class="v">9</div><div class="d">${L('紧急 2','2 critical')}</div></div>
+  <div class="kpi"><small>${L('紧急告警平均响应','Critical response')}</small><div class="v">8<span style="font-size:14px">min</span></div><div class="d">${L('承诺 ≤15 分钟','SLA ≤15 min')}</div></div>
+  <div class="kpi"><small>${L('今日已升级给诊所医生','Escalated to clinic doctors')}</small><div class="v">4</div><div class="d">${L('经 App 和 Plato 任务通知','Via app and Plato task')}</div></div>
+  <div class="kpi"><small>${L('本周周审阅完成','Weekly reviews done')}</small><div class="v">286/301</div><div class="d">95%</div></div>
+ </div>
+ <div class="panel"><div class="tbl-wrap"><table><thead><tr><th>${L('患者 / 机构','Patient / partner')}</th><th>${L('事项','Item')}</th><th>${L('时限','Due')}</th><th>${L('操作','Action')}</th></tr></thead><tbody>
+ ${Q.map(([lv,id,org,what,due])=>{const p=pById(id);return `<tr><td><span class="sev ${lv}"></span><span class="pname">${p?T(p.n):id}</span><div class="sub">${org}</div></td><td><b>${what}</b></td><td class="num ${lv==='crit'?'s crit':''}">${due}</td><td style="white-space:nowrap"><button class="btn sm" data-act="toast" data-v="${L('已联系患者并记录','Patient contacted, note saved')}">${L('处理','Handle')}</button> <button class="btn sm pri" data-act="toast" data-v="${L('已升级给诊所医生，并在 Plato 建任务','Escalated to clinic doctor; Plato task created')}">${L('升级给医生','Escalate')}</button></td></tr>`}).join('')}</tbody></table></div></div>
+ <p class="sub">${L('平台护士只做数据审阅、联系患者和健康教育，不做诊断、不改药。需要医疗判断的一律升级给患者所属诊所的医生。','Central nurses review data, contact patients and educate. They do not diagnose or change medication; anything needing a medical decision is escalated to the patient’s own clinic doctor.')}</p>`;
+}
+function cOrgs(){
+ const R=[[L('海湾家庭诊所','Bayview Family Clinic'),L('单体 GP','Solo GP'),1,46,L('混合','Mixed'),'Plato',L('试点','Pilot'),'info'],[L('狮城医疗连锁（试点门店）','Lion City Medical chain (pilot sites)'),L('GP 连锁','GP chain'),3,61,L('平台护士','Central team'),'Plato',L('试点','Pilot'),'info'],[L('明德健康体检中心','Mingde Health Screening'),L('体检中心','Screening centre'),2,18,L('体检中心医生','Centre doctors'),L('自有系统','Own system'),L('已签约','Signed'),'ok'],[L('东区 PCN 诊所群','East PCN clinics'),L('PCN','PCN'),5,0,L('PCN 护理协调员','PCN coordinators'),'Plato / Clinic Assist',L('洽谈中','In talks'),'']];
+ return `<div class="phead"><h2>${L('合作机构','Partners')}</h2><button class="btn pri" data-act="toast" data-v="${L('新增机构（示意）','Add partner (illustrative)')}">${L('+ 新增机构','+ Add partner')}</button></div>
+ <div class="panel"><div class="tbl-wrap"><table><thead><tr><th>${L('机构','Partner')}</th><th>${L('类型','Type')}</th><th>${L('门店','Sites')}</th><th>${L('在订计划','Active plans')}</th><th>${L('日常审阅','Daily review')}</th><th>CMS</th><th>${L('状态','Status')}</th></tr></thead><tbody>
+ ${R.map(r=>`<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td class="num">${r[2]}</td><td class="num">${r[3]}</td><td>${r[4]}</td><td>${r[5]}</td><td><span class="chip ${r[7]}">${r[6]}</span></td></tr>`).join('')}</tbody></table></div></div>
+ <p class="sub">${L('每家机构签一份服务协议：约定临床服务费率、审阅分工、告警升级路径、数据处理（PDPA 数据中介协议）和设备借用规则。','Each partner signs a service agreement covering service-fee rates, review split, escalation path, data processing (PDPA) and device loan terms.')}</p>`;
+}
+
+const CH=[
+ {n:['安心保险代理团队','Anxin insurance agency team'],t:['保险代理','Insurance agency'],code:'AX-021',su:22,paid:14,ret:'86%',rule:['每个有效入组 S$40','S$40 per qualified enrolment'],due:560,ok:1},
+ {n:['企业福利平台 A','Employee benefits platform A'],t:['企业福利平台','Benefits platform'],code:'CORP-A',su:18,paid:11,ret:'91%',rule:['每个有效入组 S$30','S$30 per qualified enrolment'],due:330,ok:1},
+ {n:['乐龄社区中心','Seniors community centre'],t:['社区组织','Community group'],code:'SC-07',su:9,paid:5,ret:'—',rule:['每月固定合作费 S$300','Flat S$300 a month'],due:300,ok:1},
+ {n:['推广员 Jason Ng','Promoter Jason Ng'],t:['个人推广员','Individual promoter'],code:'P-118',su:6,paid:3,ret:'67%',rule:['每个有效入组 S$30','S$30 per qualified enrolment'],due:60,ok:1,note:['扣回 1 笔（30 天内取消）','1 clawed back (cancelled within 30 days)']},
+ {n:['患者推荐','Patient referrals'],t:['患者推荐','Patient referral'],code:['个人码','Personal codes'],su:7,paid:4,ret:'—',rule:['推荐人得 S$15 账单抵扣，不发现金','Referrer gets S$15 bill credit, no cash'],due:60,ok:1,credit:1},
+ {n:['海湾家庭诊所','Bayview Family Clinic'],t:['诊所','Clinic'],code:'BFC',su:31,paid:24,ret:'84%',rule:['不适用：医疗机构不付佣金','n/a: no commission to healthcare providers'],due:0,ok:0},
+ {n:['明德健康体检中心','Mingde Health Screening'],t:['体检中心','Screening centre'],code:'MD-HS',su:12,paid:7,ret:'—',rule:['不适用：按批发采购结算','n/a: settled as wholesale purchase'],due:0,ok:0}
+];
+function cChannels(){
+ const tot=CH.filter(c=>c.ok&&!c.credit).reduce((a,c)=>a+c.due,0);
+ return `<div class="phead"><h2>${L('渠道与佣金','Channels & commissions')}</h2>${EG()}<button class="btn">${L('导出 Excel','Export Excel')}</button><button class="btn pri" data-act="toast" data-v="${L('新建渠道：生成专属推荐码和二维码（示意）','New channel: unique code and QR generated (illustrative)')}">${L('+ 新建渠道','+ New channel')}</button></div>
+ <div class="kpis">
+  <div class="kpi"><small>${L('本月新注册患者','New sign-ups this month')}</small><div class="v">105</div><div class="d">${L('有来源记录 100%','100% with a source')}</div></div>
+  <div class="kpi"><small>${L('其中开通付费计划','Converted to paid plans')}</small><div class="v">68</div><div class="d">${L('转化率 65%','65% conversion')}</div></div>
+  <div class="kpi"><small>${L('本月应付佣金','Commission due this month')}</small><div class="v">${money(tot)}</div><div class="d">${L('另有账单抵扣 S$60','Plus S$60 bill credits')}</div></div>
+  <div class="kpi"><small>${L('待审核的归属变更','Attribution changes to review')}</small><div class="v" style="color:var(--warn)">2</div><div class="d">${L('需运营审批','Needs ops approval')}</div></div>
+ </div>
+ <div class="panel"><div class="panel-h"><h3>${L('按渠道统计 · 2026 年 9 月','By channel · Sep 2026')}</h3><span class="sub">${L('患者是谁带来的、带来多少、留下多少','Who brought patients in, how many, how many stayed')}</span></div><div class="tbl-wrap"><table><thead><tr><th>${L('渠道','Channel')}</th><th>${L('推荐码','Code')}</th><th>${L('注册','Sign-ups')}</th><th>${L('付费','Paid')}</th><th>${L('3 个月留存','3-mo retention')}</th><th>${L('佣金规则','Commission rule')}</th><th>${L('本月佣金','This month')}</th></tr></thead><tbody>
+ ${CH.map(c=>`<tr><td><b>${T(c.n)}</b><div class="sub">${T(c.t)}</div></td><td class="num">${T(c.code)}</td><td class="num">${c.su}</td><td class="num">${c.paid}</td><td class="num">${c.ret}</td><td class="${c.ok?'':'sub'}">${T(c.rule)}</td><td class="num">${c.ok?`${money(c.due)}${c.credit?L(' 抵扣',' credit'):''}`:'—'}${c.note?`<div class="sub">${T(c.note)}</div>`:''}</td></tr>`).join('')}
+ </tbody></table></div></div>
+ <div class="grid2">
+  <div class="panel"><div class="panel-h"><h3>${L('佣金明细 · 安心保险代理团队','Commission lines · Anxin insurance agency')}</h3><button class="btn sm">${L('生成结算单','Create statement')}</button></div><div class="tbl-wrap"><table><thead><tr><th>${L('患者（脱敏）','Patient (masked)')}</th><th>${L('首次付款','First paid')}</th><th>${L('状态','Status')}</th></tr></thead><tbody>
+  ${[['T*** K***','8/17','ok',L('可结算','Payable')],['L*** P*** S***','8/31','ok',L('可结算','Payable')],['O*** W***','9/12','ok',L('可结算','Payable')],['R*** K***','9/24','info',L('等满 30 天（10/24）','Waits 30 days (10/24)')],['C*** B***','9/26','crit',L('已扣回：退款','Clawed back: refunded')]].map(r=>`<tr><td>${r[0]}</td><td class="num">${r[1]}</td><td><span class="chip ${r[2]}">${r[3]}</span></td></tr>`).join('')}</tbody></table></div></div>
+  <div class="panel"><div class="panel-h"><h3>${L('归属与结算规则','Attribution and payout rules')}</h3></div><div class="panel-b"><ol style="margin:0;padding-left:18px;font-size:13px;display:flex;flex-direction:column;gap:5px">
+   <li>${L('每个渠道和推广员有专属推荐码、二维码和链接；患者注册时自动记录，首次归属为准。','Every channel and promoter gets a unique code, QR and link; recorded at sign-up, first touch wins.')}</li>
+   <li>${L('“获客渠道”和“照护诊所”分开记录：患者用中介码注册、由诊所管理时，临床归诊所，佣金归中介。','Acquisition channel and care clinic are separate fields: clinical care goes to the clinic, commission to the channel.')}</li>
+   <li>${L('首次付款满 30 天且没有退款才计佣金；30 天内取消或退款自动扣回。','Commission counts only after 30 days paid with no refund; cancellations or refunds within 30 days are clawed back.')}</li>
+   <li>${L('归属变更需运营审批，全程留审计记录。','Attribution changes need ops approval and are audit-logged.')}</li>
+   <li>${L('医疗机构、医生和医护人员不能设置佣金，系统直接拦截。','Commission cannot be set for healthcare providers, doctors or clinical staff; the system blocks it.')}</li>
+   <li>${L('中介门户只显示人数、状态和结算金额，看不到任何健康数据。','The channel portal shows counts, status and payouts only, never health data.')}</li>
+  </ol></div></div>
+ </div>
+ <div class="callout">${L('<b>合规提醒：</b>佣金由平台从自己的收入里支付，不从诊所临床服务费中扣，也不加价转嫁给患者；患者在支付页能看到自己是由哪个渠道推荐的。SMC 准则要求给中介的费用不能按医生的服务量或收费计算，按转介付费还可能涉及《防止贪污法》。所以默认用“每个有效入组固定金额”或“固定月费”，不按医疗费用抽成。上线前请律师确认。',
+ '<b>Compliance:</b> the platform pays commissions from its own revenue, never from the clinic service fee, and never marks them up to patients; patients see which channel referred them at checkout. SMC guidance says agent fees must not be based on doctors’ service volume or fees, and paying for referrals can raise Prevention of Corruption Act issues. So the defaults are a fixed amount per qualified enrolment or a flat monthly fee, never a cut of medical fees. Have a lawyer confirm before launch.')}</div>`;
+}
+
+const sw=on=>`<button type="button" class="sw ${on?'on':''}" data-act="sw" aria-label="toggle" style="border:0;padding:0"></button>`;
+function cSettings(){
+ const tabs=[['acct',L('账号与角色','Accounts & roles')],['rules',L('告警规则','Alert rules')],['tpl',L('随访模板','Follow-up templates')],['survey',L('问卷','Surveys')],['notify',L('通知','Notifications')],['clinicinfo',L('诊所信息','Clinic profile')],['audit',L('审计日志','Audit log')]];
+ let b='';
+ if(S.st==='acct'){
+  const U=[['李伟明 Dr. Li Wei Ming',L('医生','Doctor'),'MCR M12345A','ok',L('已启用','Active'),L('今天 08:02','Today 08:02')],['周敏 Dr. Zhou Min',L('医生','Doctor'),'MCR M23456B','ok',L('已启用','Active'),L('今天 07:40','Today 07:40')],['陈美玲 Chen Mei Ling',L('护士 / 健康管理师','Nurse / care manager'),'SNB R34567','ok',L('已启用','Active'),L('今天 07:31','Today 07:31')],['何佳 He Jia',L('护士 / 健康管理师','Nurse / care manager'),'SNB R45678','ok',L('已启用','Active'),L('昨天','Yesterday')],['Aaron Tan',L('前台','Front desk'),'—','',L('邀请待接受','Invite pending'),'—'],['Susan Lim',L('诊所管理员','Clinic admin'),'—','ok',L('已启用','Active'),L('9月30日','Sep 30')]];
+  const R=[[L('查看患者健康数据','View patient health data'),1,1,0,0],[L('建档、预约、发放设备','Register, book, issue devices'),1,1,1,0],[L('处理告警','Handle alerts'),1,1,0,0],[L('修改个人阈值','Edit patient thresholds'),1,0,0,0],[L('签发随访结论 / 心电判读','Sign off follow-ups / ECG reads'),1,0,0,0],[L('开监测计划','Start care plans'),1,1,0,0],[L('导出报表','Export reports'),1,1,0,1],[L('账号、模板与设置','Accounts, templates, settings'),0,0,0,1],[L('查看服务费结算','View service fees'),0,0,0,1]];
+  const ck=v=>v?`<span style="color:var(--ok);font-weight:700">✓</span>`:`<span class="sub">—</span>`;
+  b=`<div class="panel"><div class="panel-h"><h3>${L('账号','Accounts')} <span class="sub num">6</span></h3><button class="btn sm pri" data-act="toast" data-v="${L('邀请已发送到对方邮箱','Invite sent by email')}">${L('+ 邀请成员','+ Invite member')}</button></div><div class="tbl-wrap"><table><thead><tr><th>${L('姓名','Name')}</th><th>${L('角色','Role')}</th><th>${L('执业注册号','Registration no.')}</th><th>${L('状态','Status')}</th><th>${L('最近登录','Last sign-in')}</th><th></th></tr></thead><tbody>
+  ${U.map(u=>`<tr><td><b>${u[0]}</b></td><td>${u[1]}</td><td class="num">${u[2]}</td><td><span class="chip ${u[3]}">${u[4]}</span></td><td class="num sub">${u[5]}</td><td><button class="btn sm">${L('编辑','Edit')}</button></td></tr>`).join('')}</tbody></table></div></div>
+  <div class="grid2"><div class="panel"><div class="panel-h"><h3>${L('角色权限','Role permissions')}</h3><span class="sub">${L('系统预设，可复制后自定义','Presets; copy to customise')}</span></div><div class="tbl-wrap"><table class="perm"><thead><tr><th>${L('权限','Permission')}</th><th>${L('医生','Doctor')}</th><th>${L('护士','Nurse')}</th><th>${L('前台','Front desk')}</th><th>${L('管理员','Admin')}</th></tr></thead><tbody>
+  ${R.map(r=>`<tr><td>${r[0]}</td>${r.slice(1).map(v=>`<td>${ck(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>
+  <div class="panel"><div class="panel-h"><h3>${L('登录安全','Sign-in security')}</h3></div><div class="panel-b" style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+   ${[[L('所有人必须开启双重验证 (2FA)','Require 2FA for everyone'),1],[L('Singpass 登录（医护）','Singpass sign-in (staff)'),0],[L('15 分钟无操作自动退出','Sign out after 15 min idle'),1],[L('只允许诊所网络 IP 访问','Allow clinic network IPs only'),0]].map(([l,on])=>`<div style="display:flex;align-items:center;gap:10px"><span style="flex:1">${l}</span>${sw(on)}</div>`).join('')}
+   <span class="sub">${L('医生和护士账号需填写 SMC / SNB 注册号，签发结论时显示在记录上。','Doctors and nurses add their SMC / SNB number; it appears on what they sign.')}</span></div></div></div>`;
+ } else if(S.st==='rules'){
+  const R=[[L('收缩压','Systolic BP'),'mmHg','≥ 180','≥ 160','—',L('2 次读数平均','Mean of 2 readings')],[L('舒张压','Diastolic BP'),'mmHg','≥ 110','≥ 100','—',L('2 次读数平均','Mean of 2 readings')],[L('血糖（CGM）','Glucose (CGM)'),'mmol/L','< 3.0 · > 16.7','< 3.9 · > 13.9',L('持续 15 分钟','Lasting 15 min'),L('Sinocare 实时','Sinocare live')],[L('心电','ECG'),'—',L('房颤字段到位后启用','After AF field exists'),L('每条进入判读队列','Every record to review'),'—',L('导联脱落提示重测','Lead-off: retake')],[L('静息心率','Resting HR'),'bpm','> 130 · < 40','> 110 · < 50',L('戒指 / 手环','Ring / band'),L('仅供参考','Reference only')],[L('夜间血氧','Overnight SpO₂'),'%','< 85','< 90',L('持续 10 分钟','Lasting 10 min'),L('仅供参考','Reference only')],[L('无数据','No data'),'h','—','> 72','—',L('按计划要求','Per plan')]];
+  b=`<div class="callout">${L('这里是机构默认阈值，入组时自动套用到患者，医生可以在患者详情里单独调整。所有数值都要临床负责人签字确认后才能启用。','These are clinic defaults applied at enrolment; doctors can override per patient. All values need sign-off by the clinical lead before going live.')}</div>
+  <div class="panel"><div class="panel-h"><h3>${L('默认告警阈值','Default alert thresholds')}</h3><span class="chip warn">${L('待临床签字','Awaiting clinical sign-off')}</span><button class="btn sm pri" data-act="toast" data-v="${L('已提交给临床负责人签字','Sent to clinical lead for sign-off')}">${L('提交签字','Submit for sign-off')}</button></div><div class="tbl-wrap"><table><thead><tr><th>${L('指标','Metric')}</th><th>${L('单位','Unit')}</th><th>${L('紧急','Critical')}</th><th>${L('关注','Watch')}</th><th>${L('条件','Condition')}</th><th>${L('备注','Note')}</th></tr></thead><tbody>
+  ${R.map(r=>`<tr><td><b>${r[0]}</b></td><td class="sub">${r[1]}</td><td class="num s crit">${r[2]}</td><td class="num s warn">${r[3]}</td><td class="sub">${r[4]}</td><td class="sub">${r[5]}</td></tr>`).join('')}</tbody></table></div></div>
+  <div class="grid2"><div class="panel"><div class="panel-h"><h3>${L('升级规则','Escalation')}</h3></div><div class="panel-b" style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+   <div>${L('紧急告警','Critical alert')} <b>15</b> ${L('分钟无人认领 → 通知责任医生','min unclaimed → notify responsible doctor')}</div><div>${L('再过','Then after')} <b>15</b> ${L('分钟 → 短信给诊所管理员','min → SMS clinic admin')}</div><div>${L('非工作时间 → 平台集中护士接手','After hours → central nurse team takes over')} ${sw(1)}</div><div>${L('同时在 Plato 建任务','Also create a Plato task')} ${sw(1)}</div></div></div>
+  <div class="panel"><div class="panel-h"><h3>${L('工作时间','Working hours')}</h3></div><div class="panel-b sub" style="font-size:13px">${L('周一至周五 08:30–21:00 · 周六 08:30–13:00 · 周日及公众假期休息（新加坡公众假期自动导入）','Mon–Fri 08:30–21:00 · Sat 08:30–13:00 · closed Sun and public holidays (SG holidays imported)')}</div></div></div>`;
+ } else if(S.st==='tpl'){
+  const steps=[[L('入组','Enrol'),L('第 0 天','Day 0'),L('门诊','Clinic'),L('签同意书、发设备、教患者测量','Consent, issue device, teach measuring')],[L('首次回访','First check-in'),L('第 7 天','Day 7'),L('电话','Phone'),L('确认会用设备、测量依从','Device use and adherence')],[L('月度随访','Monthly'),L('每 30 天','Every 30 days'),L('电话 + 问卷','Phone + survey'),L('高血压月度问卷','Monthly HTN survey')],[L('医生复核','Doctor review'),L('每 30 天','Every 30 days'),L('视频（可选）','Video (optional)'),L('看 30 天趋势，必要时调药','30-day trend, adjust meds if needed')],[L('季度门诊','Quarterly visit'),L('第 90、180 天','Days 90, 180'),L('门诊','Clinic'),L('HbA1c、肾功能等化验（Healthier SG 指标）','HbA1c, renal labs (Healthier SG indicators)')]];
+  b=`<div class="phead" style="margin:0"><select class="input"><option>${L('高血压管理 · 6 个月','HTN program · 6 months')}</option><option>${L('CGM 管理','CGM program')}</option><option>${L('心衰出院后 · 30 天','HF post-discharge · 30 days')}</option></select><span class="sub">${L('42 名患者在用 · 修改只影响之后生成的随访','42 patients · edits only affect future tasks')}</span><button class="btn sm" style="margin-left:auto">${L('复制为新模板','Duplicate')}</button><button class="btn sm pri" data-act="toast" data-v="${L('模板已保存','Template saved')}">${L('保存','Save')}</button></div>
+  <div class="panel"><div class="panel-h"><h3>${L('随访节点','Steps')}</h3><button class="btn sm">${L('+ 添加节点','+ Add step')}</button></div><div class="panel-b" style="display:flex;flex-direction:column;gap:8px">
+  ${steps.map((r,i)=>`<div class="qrow"><span class="h">⋮⋮</span><span class="num chip">${i+1}</span><div style="flex:1;min-width:0"><b>${r[0]}</b> <span class="sub">· ${r[1]} · ${r[2]}</span><div class="sub">${r[3]}</div></div><button class="btn sm">${L('编辑','Edit')}</button></div>`).join('')}</div></div>
+  <div class="grid2"><div class="panel"><div class="panel-h"><h3>${L('自动规则','Automation')}</h3></div><div class="panel-b" style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+   ${[[L('紧急告警自动生成当天随访','Critical alert creates a same-day follow-up'),1],[L('连续 2 次未接通标记“失访风险”','2 missed calls flags loss-to-follow-up risk'),1],[L('两次慢病复诊间隔 ≥92 天提醒（Healthier SG）','Remind when chronic visits are ≥92 days apart (Healthier SG)'),1],[L('随访结论写入 Plato 病历备注','Write conclusions to Plato case notes'),0]].map(([l,on])=>`<div style="display:flex;align-items:center;gap:10px"><span style="flex:1">${l}</span>${sw(on)}</div>`).join('')}</div></div>
+  <div class="panel"><div class="panel-h"><h3>${L('出组条件','Exit criteria')}</h3></div><div class="panel-b sub" style="font-size:13px">${L('满 6 个月且最近 30 天血压达标率 ≥70% → 建议转为维护随访；患者取消计划 → 自动结案并回收设备。','6 months and ≥70% of readings at goal in last 30 days → suggest maintenance follow-up; plan cancelled → auto close and recover devices.')}</div></div></div>`;
+ } else if(S.st==='survey'){
+  const Q=[[L('单选','Single choice'),L('过去一个月有没有漏服降压药？','Missed BP medicine in the past month?'),L('没有 / 1–2 次 / 3 次以上','None / 1–2 times / 3+ times')],[L('多选','Multi choice'),L('最近有没有以下症状？','Any of these symptoms recently?'),L('头晕 / 头痛 / 胸闷 / 脚肿 / 都没有','Dizziness / headache / chest tightness / swollen feet / none')],[L('量表 1–5','Scale 1–5'),L('您觉得自己控制血压的信心有多大？','How confident are you in managing your BP?'),'1 – 5'],[L('数字','Number'),L('平均每天吃几顿外卖或小贩中心餐？','Hawker or takeaway meals per day?'),'0 – 5'],[L('文本','Text'),L('想告诉医生的话（选填）','Anything to tell your doctor? (optional)'),'—']];
+  b=`<div class="grid2"><div class="panel"><div class="panel-h"><h3>${L('高血压月度问卷','Monthly HTN survey')}</h3><span class="chip ok">${L('已发布 v3','Published v3')}</span><button class="btn sm">${L('预览','Preview')}</button></div><div class="panel-b" style="display:flex;flex-direction:column;gap:8px">
+  ${Q.map((q,i)=>`<div class="qrow"><span class="h">⋮⋮</span><div style="flex:1;min-width:0"><span class="chip">${q[0]}</span><div style="margin-top:4px"><b style="font-weight:500">${i+1}. ${q[1]}</b></div><div class="sub">${q[2]}</div></div><button class="btn sm">${L('编辑','Edit')}</button></div>`).join('')}
+  <button class="btn" style="align-self:flex-start">${L('+ 添加题目','+ Add question')}</button></div></div>
+  <div class="panel"><div class="panel-h"><h3>${L('设置','Settings')}</h3></div><div class="panel-b" style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+   <div>${L('语言','Languages')}: <span class="chip acc">English</span> <span class="chip acc">中文</span> <span class="chip">Melayu</span> <span class="chip">தமிழ்</span></div>
+   <div style="display:flex;align-items:center;gap:10px"><span style="flex:1">${L('“漏服 3 次以上”自动生成护士随访','“3+ missed” creates a nurse follow-up')}</span>${sw(1)}</div>
+   <div style="display:flex;align-items:center;gap:10px"><span style="flex:1">${L('“胸闷”立即生成紧急告警','“Chest tightness” raises a critical alert')}</span>${sw(1)}</div>
+   <span class="sub">${L('回答以结构化数据进入随访记录，可在报表中统计。','Answers land in the follow-up record as structured data for reporting.')}</span></div></div></div>`;
+ } else if(S.st==='notify'){
+  const N=[[L('紧急告警','Critical alert'),[1,1,1,0]],[L('关注级告警','Watch alert'),[1,0,1,0]],[L('随访提醒','Follow-up reminder'),[1,1,0,0]],[L('测量提醒','Measurement reminder'),[1,0,0,0]],[L('支付链接 / 扣款失败','Pay link / failed payment'),[1,1,0,1]],[L('传感器发货','Sensor shipped'),[1,0,0,1]]];
+  b=`<div class="panel"><div class="panel-h"><h3>${L('通知渠道','Channels')}</h3><span class="sub">${L('患者端 / 医护端','Patient / staff')}</span></div><div class="tbl-wrap"><table class="perm"><thead><tr><th>${L('事件','Event')}</th><th>${L('App 推送','App push')}</th><th>${L('短信','SMS')}</th><th>${L('医护门户','Staff portal')}</th><th>${L('邮件','Email')}</th></tr></thead><tbody>
+  ${N.map(([l,v])=>`<tr><td>${l}</td>${v.map(x=>`<td>${sw(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>
+  <div class="panel"><div class="panel-h"><h3>${L('短信模板 · 紧急告警（患者）','SMS template · critical alert (patient)')}</h3><span class="chip">EN / 中文</span></div><div class="panel-b"><textarea class="input" rows="3">${L('【海湾家庭诊所】您刚才的血压 {value} 偏高。请休息 5 分钟后复测；如有胸痛、气促请立即拨打 995。护士会尽快联系您。','[Bayview Family Clinic] Your BP just now, {value}, is high. Rest 5 minutes and measure again. If you have chest pain or breathlessness, call 995 now. A nurse will contact you soon.')}</textarea><span class="sub">${L('短信不含诊断，只提示复测和急救号码。','SMS carries no diagnosis, only a retake prompt and the emergency number.')}</span></div></div>`;
+ } else if(S.st==='clinicinfo'){
+  b=`<div class="panel"><div class="panel-b"><div class="modal" style="box-shadow:none;width:100%"><div class="mb" style="padding:0">
+  ${[[L('诊所名称','Clinic name'),L('海湾家庭诊所','Bayview Family Clinic')],[L('HCSA 牌照号','HCSA licence no.'),'21M0XXXX'],[L('CHAS / Healthier SG','CHAS / Healthier SG'),L('是 / 已加入','Yes / enrolled')],[L('地址','Address'),'Blk 123 Bedok North St 1 #01-45, S460123'],[L('电话','Phone'),'+65 6XXX XXXX'],[L('邀请码','Join code'),'RENHE'],[L('默认语言','Default language'),'English'],[L('Logo 与品牌色','Logo & brand colour'),L('已上传','Uploaded')],[L('数据保存期限','Data retention'),L('结案后 6 年','6 years after discharge')],[L('数据中介协议 (PDPA)','Data processing agreement (PDPA)'),L('已签署 2026-09-20','Signed 2026-09-20')]].map(([k,v])=>`<label class="field"><span>${k}</span><input class="input" value="${v}"></label>`).join('')}
+  </div></div></div></div><p class="sub">${L('牌照号、电话为占位。','Licence and phone are placeholders.')}</p>`;
+ } else {
+  const A2=[['10/3 09:14','陈美玲 Chen Mei Ling',L('查看','Viewed'),L('患者 P1024 心电记录','Patient P1024 ECG'),'203.0.113.24'],['10/3 09:02','李伟明 Dr. Li',L('修改','Edited'),L('P1024 收缩压阈值 160→150','P1024 systolic threshold 160→150'),'203.0.113.24'],['10/3 08:47','Susan Lim',L('导出','Exported'),L('9 月报表（Excel，128 名患者）','Sep report (Excel, 128 patients)'),'203.0.113.30'],['10/2 21:15','Siti (Platform)',L('查看','Viewed'),L('P1007 CGM 数据（集中审阅授权）','P1007 CGM data (central review grant)'),'198.51.100.7'],['10/2 17:30','Susan Lim',L('权限','Permission'),L('邀请 Aaron Tan 为前台','Invited Aaron Tan as front desk'),'203.0.113.30']];
+  b=`<div class="phead" style="margin:0"><input class="input" placeholder="${L('搜索人员、患者、操作','Search user, patient, action')}" style="width:260px"><select class="input"><option>${L('近 7 天','Last 7 days')}</option></select><button class="btn sm" style="margin-left:auto">${L('导出','Export')}</button></div>
+  <div class="panel"><div class="tbl-wrap"><table><thead><tr><th>${L('时间','Time')}</th><th>${L('人员','User')}</th><th>${L('操作','Action')}</th><th>${L('对象','Object')}</th><th>IP</th></tr></thead><tbody>
+  ${A2.map(r=>`<tr><td class="num">${r[0]}</td><td>${r[1]}</td><td><span class="chip">${r[2]}</span></td><td>${r[3]}</td><td class="num sub">${r[4]}</td></tr>`).join('')}</tbody></table></div></div>
+  <p class="sub">${L('所有查看、修改、导出健康数据的操作都记录，不可删除，保存 6 年。','Every view, edit and export of health data is logged, cannot be deleted, and is kept 6 years.')}</p>`;
+ }
+ return `<div class="phead"><h2>${L('系统设置','Settings')}</h2><span class="sub">${L('诊所管理员可见','Clinic admins')}</span></div>
+ <div class="ptabs" role="tablist">${tabs.map(([k,l])=>`<button role="tab" data-act="st" data-v="${k}" aria-selected="${S.st===k}">${l}</button>`).join('')}</div>${b}`;
+}
+function cModels(){
+ const ck=v=>v===1?`<span style="color:var(--ok);font-weight:700">✓</span>`:v===2?`<span class="chip warn">${L('估算','Est.')}</span>`:`<span class="sub">—</span>`;
+ const M=[[L('血压计（待定型号）','BP monitor (TBD)'),'BLE 0x1810',L('HSA 注册待确认','HSA TBC'),[1,1,0,0,0,0,0]],['MD100C',L('BLE 0xFEE9 · 厂商 SDK','BLE 0xFEE9 · vendor SDK'),L('Class B 注册中','Class B pending'),[0,1,1,1,0,0,0]],[L('HBand 戒指（型号待定）','HBand ring (TBD)'),'HBand SDK',L('健康类','Wellness'),[2,1,0,1,1,1,0]],[L('HBand 手环（型号待定）','HBand band (TBD)'),'HBand SDK',L('健康类','Wellness'),[2,1,0,1,1,1,0]],['Sinocare CGM',L('云对云 + App 端 API','Cloud + in-app API'),L('HSA 注册待确认','HSA TBC'),[0,0,0,0,0,0,1]]];
+ return `<div class="phead"><h2>${L('设备型号库','Device models')}</h2><button class="btn pri" data-act="toast" data-v="${L('新增型号（示意）','Add model (illustrative)')}">${L('+ 新增型号','+ Add model')}</button></div>
+ <div class="panel"><div class="tbl-wrap"><table class="perm"><thead><tr><th>${L('型号','Model')}</th><th>${L('接入方式','Connection')}</th><th>${L('注册状态','Registration')}</th><th>${L('血压','BP')}</th><th>${L('心率','HR')}</th><th>${L('心电','ECG')}</th><th>SpO₂</th><th>${L('睡眠','Sleep')}</th><th>${L('步数','Steps')}</th><th>${L('血糖','Glucose')}</th></tr></thead><tbody>
+ ${M.map(m=>`<tr><td><b>${m[0]}</b></td><td class="sub">${m[1]}</td><td><span class="chip">${m[2]}</span></td>${m[3].map(v=>`<td>${ck(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>
+ <p class="sub">${L('能力表决定每个型号能产生哪些指标、能否触发告警。标“估算”的指标（戒指和手环的血压）只做参考展示，不触发告警。戒指和手环型号确定后在这里登记即可，不用改代码。','The capability table sets which metrics each model produces and whether they can alert. “Est.” metrics (ring and band BP) are shown for reference only and never alert. Register ring and band models here once chosen; no code change needed.')}</p>`;
+}
+function cPStats(){
+ return `<div class="phead"><h2>${L('我的推荐 · 2026 年 9 月','My referrals · Sep 2026')}</h2></div>
+ <div class="kpis"><div class="kpi"><small>${L('注册','Sign-ups')}</small><div class="v">22</div></div><div class="kpi"><small>${L('开通付费计划','Paid plans')}</small><div class="v">14</div></div><div class="kpi"><small>${L('3 个月留存','3-mo retention')}</small><div class="v">86%</div></div><div class="kpi"><small>${L('本月佣金','Commission')}</small><div class="v">${money(560)}</div></div></div>
+ <div class="panel"><div class="panel-h"><h3>${L('按推广员','By promoter')}</h3></div><div class="tbl-wrap"><table><thead><tr><th>${L('推广员','Promoter')}</th><th>${L('推荐码','Code')}</th><th>${L('注册','Sign-ups')}</th><th>${L('付费','Paid')}</th><th>${L('待确认','Pending')}</th></tr></thead><tbody>
+ ${[['Rachel Ho','AX-021-01',9,6,1],['Daniel Koh','AX-021-02',8,5,1],['Mei Chua','AX-021-03',5,3,0]].map(r=>`<tr><td>${r[0]}</td><td class="num">${r[1]}</td><td class="num">${r[2]}</td><td class="num">${r[3]}</td><td class="num">${r[4]}</td></tr>`).join('')}</tbody></table></div></div>
+ <div class="callout">${L('渠道合作方只看得到人数、状态和佣金，看不到患者姓名、联系方式或任何健康数据。','Partners see counts, status and commission only, never patient names, contacts or health data.')}</div>`;
+}
+function cPKit(){
+ return `<div class="phead"><h2>${L('推广物料','Referral kit')}</h2></div>
+ <div class="grid2"><div class="panel"><div class="panel-h"><h3>${L('专属二维码与链接','Your QR and link')}</h3></div><div class="panel-b" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+  <svg viewBox="0 0 21 21" width="120" height="120" style="background:#fff;border-radius:8px;padding:6px" aria-label="QR">${(()=>{let r='';let x=11;for(let i=0;i<21;i++)for(let j=0;j<21;j++){x=(x*73+41)%997;const f=(i<7&&j<7)||(i<7&&j>13)||(i>13&&j<7);const on=f?((i%6===0||j%6===0||(i>1&&i<5&&j>1&&j<5)||(i>15&&i<19&&j>1&&j<5)||(i>1&&i<5&&j>15&&j<19))&&!(i===6&&j>6&&j<14)):x%2;if(f){const a=i>13?i-14:i,b=j>13?j-14:j;if(!((a===0||a===6||b===0||b===6)||(a>1&&a<5&&b>1&&b<5)))continue}if(on)r+=`<rect x="${j}" y="${i}" width="1" height="1" fill="#111"/>`}return r})()}</svg>
+  <div style="display:flex;flex-direction:column;gap:6px;min-width:0"><span class="num">rpm.example.sg/r/AX-021</span><span class="sub">${L('推荐码','Code')}: <b class="num">AX-021</b></span><div style="display:flex;gap:8px"><button class="btn sm" data-act="toast" data-v="${L('链接已复制','Link copied')}">${L('复制链接','Copy link')}</button><button class="btn sm">${L('下载二维码','Download QR')}</button></div></div></div></div>
+  <div class="panel"><div class="panel-h"><h3>${L('宣传材料','Materials')}</h3></div><div class="panel-b sub" style="font-size:13px">${L('平台提供经审核的海报和单页（中 / 英）。合作方不得自行宣传疗效或使用医生名义；对外宣传需符合新加坡医疗广告规定。','Platform-approved posters and flyers (EN / 中文). Partners may not make their own efficacy claims or use doctors’ names; publicity must follow Singapore healthcare advertising rules.')}</div></div></div>`;
+}
+function cPPay(){
+ return `<div class="phead"><h2>${L('佣金结算','Payouts')}</h2>${EG()}</div>
+ <div class="panel"><div class="tbl-wrap"><table><thead><tr><th>${L('月份','Month')}</th><th>${L('有效入组','Qualified')}</th><th>${L('扣回','Clawed back')}</th><th>${L('金额','Amount')}</th><th>${L('状态','Status')}</th></tr></thead><tbody>
+ ${[[L('2026 年 9 月','Sep 2026'),14,0,560,'info',L('待结算 · 10 月 15 日付款','Pending · pays Oct 15')],[L('2026 年 8 月','Aug 2026'),9,1,320,'ok',L('已付款','Paid')]].map(r=>`<tr><td>${r[0]}</td><td class="num">${r[1]}</td><td class="num">${r[2]}</td><td class="num">${money(r[3])}</td><td><span class="chip ${r[4]}">${r[5]}</span></td></tr>`).join('')}</tbody></table></div></div>
+ <p class="sub">${L('付款到合作方登记的公司银行账户（PayNow UEN），附电子结算单。','Paid to the partner’s registered company account (PayNow UEN) with an e-statement.')}</p>`;
+}
+
+function cHsg(){
+ const hr=(l,n,d,sub)=>{const p=Math.round(n/d*100);return `<div class="hrow"><span>${l}${sub?`<div class="sub" style="font-size:11.5px">${sub}</div>`:''}</span><div class="hbar"><i style="width:${p}%;background:${p>=80?'var(--ok)':p>=60?'var(--accent)':'var(--warn)'}"></i></div><span class="num" style="text-align:right">${n}/${d}</span></div>`};
+ const D=146;
+ const G=[['P1024',[L('LDL-C','LDL-C'),L('尿 ACR','Urine ACR')],L('第 2 次慢病复诊 10/15 起可约','2nd chronic consult bookable from 10/15'),'warn'],['P1045',[L('年度健康计划','Annual health plan'),L('HbA1c ×1','HbA1c ×1'),L('吸烟状况','Smoking status')],L('只有 1 次慢病复诊','Only 1 chronic consult'),'crit'],['P1012',[L('血压（诊所测）×1','BP (clinic) ×1')],L('两次复诊已满足','Both consults done'),'ok'],['P1061',[L('身高体重','Height/weight'),L('eGFR','eGFR'),L('尿 ACR','Urine ACR')],L('第 2 次复诊窗口 12/31 截止','2nd consult window closes 12/31'),'crit'],['P1003',[L('LDL-C','LDL-C'),L('年度健康计划','Annual health plan')],L('两次复诊已满足','Both consults done'),'ok']];
+ return `<div class="phead"><h2>Healthier SG</h2><span class="sub">${L('2026 年度 · 上报截止 2027 年 2 月 28 日（按 CY2025 规则推算，待 MOH 公布）','CY2026 · submit by Feb 28, 2027 (inferred from CY2025 rules, pending MOH)')}</span><button class="btn" style="margin-left:auto">${L('导出缺口清单','Export gap list')}</button></div>
+ <div class="kpis">
+  <div class="kpi"><small>${L('本诊所 HSG 登记患者','HSG-enrolled patients')}</small><div class="v">186</div><div class="d">${L(`其中慢病 ${D} 人`,`${D} with chronic conditions`)}</div></div>
+  <div class="kpi"><small>${L('慢病固定付费已达标','Chronic fixed pay: met')}</small><div class="v">112<span class="sub" style="font-size:14px">/${D}</span></div><div class="d">${L('每人 S$70 · 已锁定 S$7,840','S$70 each · S$7,840 secured')}</div></div>
+  <div class="kpi"><small>${L('心血代谢指标包已完成','Cardiometabolic bundle: done')}</small><div class="v">64<span class="sub" style="font-size:14px">/${D}</span></div><div class="d">${L('每人 S$30 · 已锁定 S$1,920','S$30 each · S$1,920 secured')}</div></div>
+  <div class="kpi"><small>${L('还能争取','Still available')}</small><div class="v" style="color:var(--warn)">${money(4840)}</div><div class="d">${L('补齐缺口即可拿到','If gaps are closed')}</div></div>
+ </div>
+ <div class="grid2">
+  <div class="panel"><div class="panel-h"><h3>${L('慢病固定付费条件（每人每年 S$70）','Chronic fixed-pay criteria (S$70 a year)')}</h3></div><div class="panel-b">
+   ${hr(L('年度健康计划','Annual health plan'),131,D)}${hr(L('身高 / 体重','Height / weight'),139,D)}${hr(L('CDMP 诊断编码','CDMP diagnosis codes'),146,D)}${hr(L('吸烟状况','Smoking status'),128,D)}${hr(L('2 次慢病复诊，间隔 ≥92 天','2 chronic consults ≥92 days apart'),118,D,L('还差 28 人，其中 9 人的第二次复诊窗口今年内会关闭','28 short; 9 lose their window this year'))}
+  </div></div>
+  <div class="panel"><div class="panel-h"><h3>${L('心血代谢指标包（每人每年 S$30）','Cardiometabolic bundle (S$30 a year)')}</h3></div><div class="panel-b">
+   ${hr('HbA1c ×2',71,92,L('仅糖尿病患者','Diabetes only'))}${hr(L('血压 ×2','BP ×2'),121,D,L('目前只计诊所测量','Clinic readings only for now'))}${hr('LDL-C ×1',97,D)}${hr(L('肌酐 / eGFR ×1','Creatinine / eGFR ×1'),102,D)}${hr(L('尿 ACR / PCR ×1','Urine ACR / PCR ×1'),69,D)}
+  </div></div>
+ </div>
+ <div class="panel"><div class="panel-h"><h3>${L('缺口患者','Patients with gaps')}</h3><div class="seg"><button aria-pressed="true">${L('全部 34','All 34')}</button><button>${L('窗口即将关闭 9','Window closing 9')}</button><button>${L('只差化验 15','Labs only 15')}</button></div></div><div class="tbl-wrap"><table><thead><tr><th>${L('患者','Patient')}</th><th>${L('还缺','Missing')}</th><th>${L('复诊间隔','Consult spacing')}</th><th>${L('操作','Action')}</th></tr></thead><tbody>
+ ${G.map(([id,miss,gap,lv])=>{const p=pById(id);return `<tr><td><a href="#" data-act="pt" data-v="${id}" class="pname" style="color:var(--accent)">${T(p.n)}</a><div class="sub">${p.cond.map(T).join('、')}</div></td><td>${miss.map(m=>`<span class="chip warn" style="margin:0 4px 4px 0">${m}</span>`).join('')}</td><td><span class="chip ${lv}">${gap}</span></td><td style="white-space:nowrap"><button class="btn sm" data-act="toast" data-v="${L('已在 Plato 预约复诊并开化验单','Consult and labs booked in Plato')}">${L('约复诊 + 化验','Book visit + labs')}</button> <button class="btn sm" data-act="toast" data-v="${L('已向患者 App 发送提醒','Reminder sent to patient app')}">${L('提醒患者','Remind')}</button></td></tr>`}).join('')}
+ </tbody></table></div></div>
+ <div class="callout">${L('<b>数据从哪来，上报在哪做：</b>诊断、复诊、化验结果从 Plato 读取，测量依从和随访从本平台来。正式的 Care Report 仍在 Plato 里提交（Plato API 没有上报接口），这个看板只负责找出缺口、提醒约诊。居家血压能否计入“血压 ×2”还没有得到 MOH 确认，所以目前只统计诊所测量值，居家数据作为参考显示。金额规则按 CY2025 指南，每年需核对。',
+ '<b>Where data comes from and where submission happens:</b> diagnoses, consults and lab results are read from Plato; adherence and follow-ups come from this platform. The formal Care Report is still submitted in Plato (its API has no submission endpoint); this board finds gaps and prompts bookings. Whether home BP counts toward “BP ×2” is not yet confirmed by MOH, so only clinic readings count for now and home readings are shown as reference. Payment rules follow the CY2025 guide and need checking each year.')}</div>`;
+}
+function cCatalog(){
+ return `<div class="phead"><h2>${L('计划与定价','Plans & pricing')}</h2>${EG()}<button class="btn pri" data-act="toast" data-v="${L('已保存为草稿','Saved as draft')}">${L('保存','Save')}</button></div>
+ <div class="panel"><div class="tbl-wrap"><table><thead><tr><th>${L('计划','Plan')}</th><th>${L('患者价','Patient price')}</th><th>${L('诊所服务费（平台护士 / 诊所护士）','Clinic fee (central / clinic nurse)')}</th><th>${L('含设备与耗材','Devices and consumables')}</th><th>${L('最短期限','Min. term')}</th></tr></thead><tbody>
+ ${PL.map(x=>`<tr><td><b>${T(x.n)}</b></td><td class="num">${money(x.pr)}${x.once?L(' / 次',' / check'):L(' / 月',' / mo')}</td><td class="num">${x.once?L('不适用（体检中心批发 S$120）','n/a (centre wholesale S$120)'):`${money(x.fee[0])} / ${money(x.fee[1])}`}</td><td>${x.dv.map(d=>T(DV[d])).join(' + ')}</td><td>${x.once?L('单次','One-off'):L('3 个月','3 months')}</td></tr>`).join('')}</tbody></table></div></div>
+ <div class="grid2">
+  <div class="panel"><div class="panel-h"><h3>${L('加购','Add-ons')}</h3></div><div class="panel-b sub">${L('智能手环 / 智能戒指（HBand）：一次性购买，按健康类产品销售，数据进入同一患者档案。用于医疗判断前需要先完成型号确认和注册评估。','Smart band / ring (HBand): one-off purchase sold as wellness products; data lands in the same record. Medical use waits on model choice and a registration review.')}</div></div>
+  <div class="panel"><div class="panel-h"><h3>${L('规则','Rules')}</h3></div><div class="panel-b sub">${L('月费自动续费，可随时取消（当月有效）。借用设备在取消后 14 天内归还。价格变更提前 30 天在 App 通知。MediSave 不能支付计划月费。','Monthly fees auto-renew and can be cancelled anytime (effective at month end). Loaned devices return within 14 days of cancelling. Price changes get 30 days’ notice in the app. MediSave cannot pay plan fees.')}</div></div>
+ </div>`;
+}
+function cBilling(){
+ const R=[['10/1 09:12','Tan Kian Kok',L('血压 + 血糖组合','BP + CGM combo'),169,'PayNow','ok',L('成功','Paid')],['10/1 08:40','Rajesh Kumar',L('血糖 CGM 计划','Glucose CGM plan'),149,L('信用卡','Card'),'crit',L('失败 · 已重试 1 次','Failed · retried once')],['9/30 21:05','Lee Pei Shan',L('血糖 CGM 计划','Glucose CGM plan'),149,'Apple Pay','ok',L('成功','Paid')],['9/30 18:22','Ong Wei Ling',L('14 天 CGM 代谢检查','14-day CGM check'),120,L('体检中心月结','Centre invoice'),'info',L('月结','Invoiced')]];
+ return `<div class="phead"><h2>${L('订阅与收款','Subscriptions & payments')}</h2>${EG()}</div>
+ <div class="kpis">
+  <div class="kpi"><small>${L('月经常性收入','Monthly recurring revenue')}</small><div class="v">${money(19840)}</div><div class="d">${L('环比 +14%','+14% month on month')}</div></div>
+  <div class="kpi"><small>${L('在订计划','Active plans')}</small><div class="v">166</div><div class="d">${L('CGM 类占 58%','58% include CGM')}</div></div>
+  <div class="kpi"><small>${L('月流失率','Monthly churn')}</small><div class="v">4.1%</div><div class="d">${L('主因：费用','Top reason: cost')}</div></div>
+  <div class="kpi"><small>${L('扣款失败待处理','Failed payments')}</small><div class="v" style="color:var(--crit)">3</div><div class="d">${L('3 天后暂停服务','Service pauses after 3 days')}</div></div>
+ </div>
+ <div class="panel"><div class="tbl-wrap"><table><thead><tr><th>${L('时间','Time')}</th><th>${L('付款人','Payer')}</th><th>${L('项目','Item')}</th><th>${L('金额','Amount')}</th><th>${L('方式','Method')}</th><th>${L('状态','Status')}</th></tr></thead><tbody>
+ ${R.map(r=>`<tr><td class="num">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td class="num">${money(r[3])}</td><td>${r[4]}</td><td><span class="chip ${r[5]}">${r[6]}</span></td></tr>`).join('')}</tbody></table></div></div>
+ <p class="sub">${L('支付服务商待选，需要支持 PayNow、信用卡、Apple Pay / Google Pay 和自动续费。平台不保存卡号。','Payment provider to be chosen; it must support PayNow, cards, Apple Pay / Google Pay and recurring billing. The platform never stores card numbers.')}</p>`;
+}
+function rxModal(){
+ const p=pById(S.pid),pl=plById(S.rxPlan),fee=pl.fee[S.rxRev==='clinic'?1:0];
+ return `<div class="scrim" data-act="close"><div class="modal" role="dialog" aria-modal="true" aria-label="plan" data-stop="1">
+  <div class="mh"><h3>${L('开监测计划','Start a care plan')} · ${T(p.n)}</h3><button class="btn sm" data-act="close">✕</button></div>
+  <form id="rxform"><div class="mb">
+   <div class="field full"><span>${L('计划','Plan')}</span><div class="opts">${PL.filter(x=>!x.once).map(x=>`<label><input type="radio" name="pl" data-act="rxpl" data-v="${x.k}" ${x.k===S.rxPlan?'checked':''}>${T(x.n)} · ${money(x.pr)}${L('/月','/mo')}</label>`).join('')}</div></div>
+   <div class="field"><span>${L('日常审阅','Daily review')}</span><div class="opts">${['platform','clinic'].map(k=>`<label><input type="radio" name="rv" data-act="rxrev" data-v="${k}" ${S.rxRev===k?'checked':''}>${T(REV[k])}</label>`).join('')}</div></div>
+   <div class="field"><span>${L('设备','Devices')}</span><div class="opts"><label><input type="radio" name="dl" checked>${L('诊所现场发放','Hand over at clinic')}</label><label><input type="radio" name="dl">${L('快递到家','Deliver to home')}</label></div></div>
+   <div class="field full"><span>${L('患者账单（App 内逐项展示）','Patient bill (itemised in the app)')}</span><div class="split" style="max-width:360px">
+    <div><span>${L('平台监测、设备与耗材','Platform monitoring, devices, consumables')}</span><span class="num">${money(pl.pr-fee)}</span></div>
+    <div><span>${L('诊所临床服务费（医生复核、告警处理）','Clinic service fee (doctor review, alerts)')}</span><span class="num">${money(fee)}</span></div>
+    <div class="tot"><span>${L('每月','Per month')}</span><span class="num">${money(pl.pr)}</span></div></div></div>
+   <div class="field full"><span>${L('支付','Payment')}</span><div class="opts"><label><input type="checkbox" checked>${L('发送支付链接到患者 App','Send pay link to patient app')}</label><label><input type="checkbox" checked>${L('同时发短信','Also by SMS')}</label></div></div>
+   <label class="field full" style="display:flex;gap:8px;flex-direction:row;font-size:13px"><input type="checkbox" checked style="accent-color:var(--accent)">${L('已向患者说明费用构成，并告知计划月费不能用 MediSave 支付','Fees explained to the patient, including that MediSave cannot pay plan fees')}</label>
+  </div>
+  <div class="mf"><button type="button" class="btn" data-act="close">${L('取消','Cancel')}</button><button type="submit" class="btn pri">${L('开计划并发送支付链接','Start plan and send pay link')}</button></div></form>
+ </div></div>`;
+}
+
+/* ---------- follow-up modal ---------- */
+function modal(){
+ if(!S.modal)return '';
+ if(S.modal==='rx')return rxModal();
+ const f=S.modal==='new'?null:F.find(x=>x.id===S.modal);
+ const p=pById(f?f.pid:S.pid);
+ const r=(name,opts,chk)=>`<div class="opts">${opts.map((o,i)=>`<label><input type="radio" name="${name}" ${i===chk?'checked':''}>${o}</label>`).join('')}</div>`;
+ const c=(opts)=>`<div class="opts">${opts.map((o,i)=>`<label><input type="checkbox" ${i===0?'checked':''}>${o}</label>`).join('')}</div>`;
+ return `<div class="scrim" data-act="close"><div class="modal" role="dialog" aria-modal="true" aria-label="follow-up" data-stop="1">
+  <div class="mh"><h3>${f?L('随访记录','Follow-up note'):L('新建随访','New follow-up')} · ${T(p.n)}</h3><button class="btn sm" data-act="close">✕</button></div>
+  <form id="fuform"><div class="mb">
+   ${f?`<div class="field full"><span>${L('随访事项','Purpose')}</span><b style="font-weight:500">${T(f.what)} · <span class="chip info">${T(f.why)}</span></b></div>`:''}
+   <div class="field"><span>${L('随访方式','Method')}</span>${r('how',[L('电话','Phone'),L('视频','Video'),L('门诊','Clinic'),L('问卷','Survey')],f?['phone','video','clinic','survey'].indexOf(f.how):0)}</div>
+   ${f?`<div class="field"><span>${L('是否联系上','Reached?')}</span>${r('reach',[L('已联系','Reached'),L('未接通','No answer')],0)}</div>
+   <div class="field full"><span>${L('近 7 天数据（自动带入）','Last 7 days (auto-filled)')}</span><span class="num" style="font-size:13px">${L('血压均值 158/97 mmHg · 测量 11/14 次 · CGM TIR 68%','Mean BP 158/97 mmHg · 11/14 readings · CGM TIR 68%')}</span></div>
+   <div class="field full"><label class="field"><span>${L('患者自述','Patient reports')}</span><textarea class="input" id="fu-note">${L('最近两天晨起头胀，昨晚忘记服氨氯地平。','Head pressure on waking for two days; forgot amlodipine last night.')}</textarea></label></div>
+   <div class="field"><span>${L('用药依从性','Medication adherence')}</span>${r('adh',[L('规律','Regular'),L('偶尔漏服','Sometimes missed'),L('经常漏服','Often missed')],1)}</div>
+   <div class="field"><span>${L('处理措施','Actions')}</span>${c([L('健康教育','Education'),L('加强监测','More monitoring'),L('调整用药','Adjust meds'),L('预约门诊','Book visit'),L('转诊','Refer')])}</div>`
+   :`<div class="field"><label class="field"><span>${L('日期','Date')}</span><input class="input" type="date" id="fu-date" value="2026-10-03"></label></div>
+   <div class="field full"><label class="field"><span>${L('随访事项','Purpose')}</span><input class="input" id="fu-what" value="${L('复核血压，确认服药情况','Recheck BP, confirm adherence')}"></label></div>
+   <div class="field"><label class="field"><span>${L('负责人','Owner')}</span><select class="input" id="fu-owner"><option>${L('陈护士','Nurse Chen')}</option><option>${L('李医生','Dr. Li')}</option></select></label></div>
+   <div class="field"><span>${L('通知患者','Notify patient')}</span>${c([L('App 推送','App push'),L('短信','SMS')])}</div>`}
+   ${f?`<div class="field"><label class="field"><span>${L('下次随访','Next follow-up')}</span><input class="input" type="date" id="fu-next" value="2026-10-08"></label></div>`:''}
+  </div>
+  <div class="mf"><button type="button" class="btn" data-act="close">${L('取消','Cancel')}</button><button type="submit" class="btn pri">${f?L('保存并完成','Save and complete'):L('创建随访','Create')}</button></div></form>
+ </div></div>`;
+}
+
+/* ---------- PATIENT APP ---------- */
+const APP_SCREENS=()=>[['login',L('登录 / 绑定诊所','Sign in / join clinic')],['home',L('首页','Home')],['data',L('健康数据','My data')],['devices',L('我的设备','My devices')],['pair',L('蓝牙配对','Bluetooth pairing')],['cgm',L('连接 Sinocare CGM','Connect Sinocare CGM')],['fu',L('随访','Follow-ups')],['survey',L('随访问卷','Follow-up survey')],['msg',L('消息','Messages')],['me',L('我的','Me')],['offer',L('开通计划与支付','Plan checkout')],['plan',L('我的计划','My plan')],['consult',L('预约视频复诊','Book video consult')],['check',L('14 天 CGM 检查','14-day CGM check')]];
+function app(){
+ const isIOS=S.os==='ios';
+ return `<div class="wrap"><div class="appwrap">
+  <div class="screens"><h3>${L('平台','Platform')}</h3>
+   <div class="seg" style="margin:0 10px 6px"><button data-act="os" data-v="ios" aria-pressed="${isIOS}">iOS</button><button data-act="os" data-v="android" aria-pressed="${!isIOS}">Android</button></div>
+   <h3>${L('页面','Screens')}</h3>${APP_SCREENS().map(([k,l])=>`<button class="nav" data-act="app" data-v="${k}" ${S.app===k?'aria-current="page"':''}>${l}</button>`).join('')}</div>
+  <div class="phone ${S.os}"><div class="scr">${statusBar()}${screen()}</div></div>
+  <div class="notes">${appNotes()}</div>
+ </div></div>`;
+}
+function statusBar(){return S.os==='ios'?`<div class="sb"><span class="num">9:41</span><span class="island"></span><span class="ic">5G <i></i></span></div>`:`<div class="sb"><span class="num">9:41</span><span class="punch"></span><span class="ic">▾ ▴ <i></i></span></div>`}
+function tabbar(){const t=[['home','home',L('首页','Home')],['data','chart',L('数据','Data')],['fu','cal',L('随访','Follow-up')],['msg','msg',L('消息','Messages')],['me','me',L('我的','Me')]];
+ const cur={devices:'me',pair:'me',cgm:'me',survey:'fu',plan:'me',offer:'home',consult:'fu',check:'home'}[S.app]||S.app;
+ return `<nav class="tabbar">${t.map(([k,i,l])=>`<button data-act="app" data-v="${k}" ${cur===k?'aria-current="page"':''}><span class="pill">${ic(i,1.8)}</span>${l}</button>`).join('')}</nav>`}
+const head=(t,back)=>back?`<div class="ahead small"><button class="back" data-act="app" data-v="${back}">${S.os==='ios'?'‹ '+L('返回','Back'):'←'}</button><h2>${t}</h2></div>`:`<div class="ahead"><h2>${t}</h2></div>`;
+function screen(){
+ const s=S.app;
+ if(s==='login')return `<div class="abody" style="padding-top:30px;gap:16px">
+  <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 0"><span class="mark" style="width:56px;height:56px;border-radius:16px"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:30px;height:30px"><path d="M2 12h5l2-5 3 10 2-5h8"/></svg></span><h2 style="font-size:20px">${L('RPM 远程监护','RPM Remote Care')}</h2><span class="sub">${L('海湾家庭诊所','Bayview Family Clinic')}</span></div>
+  <label class="field"><span>${L('诊所邀请码','Clinic code')}</span><input class="input" id="code" value="RENHE" style="padding:11px"></label>
+  <label class="field"><span>${L('推荐码（选填）','Referral code (optional)')}</span><input class="input" id="ref" value="AX-021" style="padding:11px"></label>
+  <label class="field"><span>${L('手机号','Phone number')}</span><input class="input" id="ph" value="+65 9123 6621" style="padding:11px"></label>
+  <label class="field"><span>${L('验证码','SMS code')}</span><div style="display:flex;gap:8px"><input class="input" id="otp" value="482 913" style="padding:11px;flex:1"><button class="btn">${L('重新获取 52s','Resend 52s')}</button></div></label>
+  <label style="display:flex;gap:8px;font-size:12px;color:var(--muted);align-items:flex-start"><input type="checkbox" checked style="accent-color:var(--accent);margin-top:3px">${L('我已阅读并同意《用户协议》、《隐私政策》（PDPA）和《远程监护知情同意书》','I agree to the Terms, Privacy Policy (PDPA) and Remote Monitoring Consent')}</label>
+  <button class="abtn" data-act="app" data-v="offer">${L('登录','Sign in')}</button>
+  <button class="abtn ghost">${L('使用 Singpass 登录','Log in with Singpass')}</button>
+  <button class="abtn ghost">${L('扫描诊所二维码','Scan clinic QR code')}</button></div>`;
+ if(s==='home')return `${head(L('早上好，陈先生','Good morning, Mr Tan'))}<div class="abody">
+  <div class="acard" style="background:var(--crit-soft)"><h4 style="color:var(--crit)">${L('护士提醒','From your nurse')}</h4><div style="font-size:13.5px">${L('今晨血压 172/104 偏高，请休息 5 分钟后复测，陈护士今天下午会给您打电话。','This morning’s BP 172/104 is high. Rest 5 minutes and measure again. Nurse Chen will call you this afternoon.')}</div><button class="abtn" data-act="app" data-v="pair" style="padding:9px">${L('现在复测','Measure now')}</button></div>
+  <div class="acard"><h4>${L('今日任务','Today')} <span class="num" style="margin-left:auto">2/5</span></h4>
+   <div class="task done"><span class="ck"></span><span class="tx">${L('测量血压（晨起）','Measure BP (morning)')}</span><span class="tm">08:14</span></div>
+   <div class="task done"><span class="ck"></span><span class="tx">${L('服用二甲双胍 1.0g','Take metformin 1.0 g')}</span><span class="tm">08:30</span></div>
+   <div class="task"><span class="ck"></span><span class="tx">${L('服用氨氯地平 5mg','Take amlodipine 5 mg')}</span><span class="tm">09:00</span></div>
+   <div class="task"><span class="ck"></span><span class="tx">${L('填写随访问卷','Complete follow-up survey')}</span><button class="more" data-act="app" data-v="survey" style="margin-left:auto;border:0;background:transparent;color:var(--accent);font-size:12.5px">${L('去填写','Start')}</button></div>
+   <div class="task"><span class="ck"></span><span class="tx">${L('测量血压（睡前）','Measure BP (bedtime)')}</span><span class="tm">21:00</span></div></div>
+  <div class="mgrid">
+   <button class="m" data-act="dseg" data-v="bp"><small>${L('血压','Blood pressure')}</small><span class="v">172/104<u>mmHg</u></span><span class="s crit">${L('偏高 · 08:14','High · 08:14')}</span></button>
+   <button class="m" data-act="dseg" data-v="cgm"><small>${L('血糖 CGM','Glucose CGM')}</small><span class="v">7.4<u>mmol/L →</u></span><span class="s ok">${L('平稳 · 5 分钟前','Steady · 5 min ago')}</span></button>
+   <button class="m" data-act="dseg" data-v="hr"><small>${L('心率','Heart rate')}</small><span class="v">72<u>bpm</u></span><span class="s mu">${L('手环','Band')}</span></button>
+   <button class="m" data-act="dseg" data-v="sleep"><small>${L('睡眠','Sleep')}</small><span class="v">6:42<u>h</u></span><span class="s mu">${L('深睡 1:18','Deep 1:18')}</span></button></div>
+  <div class="acard"><h4>${L('下次随访','Next follow-up')}<button class="more" data-act="app" data-v="fu">${L('查看','View')}</button></h4><div style="font-size:14px"><b>${L('10月3日 周六 10:00','Sat Oct 3, 10:00')}</b> · ${L('电话随访','Phone call')}</div><span class="sub">${L('陈护士 · 血压随访','Nurse Chen · BP check-in')}</span></div>
+  <div class="acard"><h4>${L('设备','Devices')}<button class="more" data-act="app" data-v="devices">${L('管理','Manage')}</button></h4><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip ok">${L('血压计','BP')}</span><span class="chip ok">${L('手环','Band')}</span><span class="chip ok">Sinocare</span></div></div>
+ </div>${tabbar()}`;
+ if(s==='data'){const seg=[['bp',L('血压','BP')],['cgm',L('血糖','Glucose')],['ecg',L('心电','ECG')],['hr',L('心率','HR')],['sleep',L('睡眠','Sleep')]];
+  let c='';
+  if(S.dseg==='bp')c=`<div class="acard"><h4>${L('近 14 天','Last 14 days')}</h4>${bpChart(300,190)}<div class="legend"><span><i style="background:var(--sys)"></i>${L('收缩压','SYS')}</span><span><i style="background:var(--dia)"></i>${L('舒张压','DIA')}</span></div></div><div class="list">${[['10/1 08:14','172/104','crit'],['9/30 20:31','163/99','warn'],['9/30 07:50','151/92','']].map(r=>`<div class="li"><div class="tx"><span class="num s ${r[2]}">${r[1]} mmHg</span><small class="num">${r[0]} · ${L('血压计','BP monitor')}</small></div><span class="chev">›</span></div>`).join('')}</div><button class="abtn ghost">${L('+ 手动录入','+ Add manually')}</button>`;
+  else if(S.dseg==='cgm')c=`<div class="acard"><h4>Sinocare CGM · ${L('今天','Today')}</h4><div style="display:flex;align-items:baseline;gap:6px"><span class="num" style="font-size:32px">7.4</span><span class="sub">mmol/L → ${L('平稳','steady')}</span></div>${cgmChart(300,170)}</div><div class="acard"><h4>${L('目标范围内时间（14 天）','Time in range (14 days)')}</h4>${tirBar()}</div>`;
+  else if(S.dseg==='ecg')c=`<div class="acard"><h4>${L('最近一次心电 · 9月30日 21:02','Latest ECG · Sep 30 21:02')}</h4>${ecgStrip(300,110,false)}<span class="s ok">${L('已上传 · 74 bpm · 医生会判读您的记录','Uploaded · 74 bpm · your doctor will review it')}</span></div><button class="abtn">${L('开始 30 秒心电记录','Record 30 s ECG')}</button>`;
+  else if(S.dseg==='hr')c=`<div class="acard"><h4>${L('心率 · 今天','Heart rate · Today')}</h4>${hrChart(300,160)}<span class="sub">${L('静息 64 · 最高 96 bpm · 来自手环','Resting 64 · max 96 bpm · from band')}</span></div><div class="acard"><h4>${L('血氧','SpO₂')}</h4><span class="num" style="font-size:24px">96%</span><span class="sub">${L('夜间最低 93%','Overnight low 93%')}</span></div>`;
+  else c=`<div class="acard"><h4>${L('昨晚睡眠','Last night')}</h4><span class="num" style="font-size:28px">6:42</span><div class="tir"><i style="width:19%;background:var(--info)"></i><i style="width:52%;background:var(--accent)"></i><i style="width:21%;background:var(--ok)"></i><i style="width:8%;background:var(--warn)"></i></div><div class="tir-l" style="grid-template-columns:repeat(4,1fr)"><div><b>1:18</b>${L('深睡','Deep')}</div><div><b>3:29</b>${L('浅睡','Light')}</div><div><b>1:25</b>REM</div><div><b>0:30</b>${L('清醒','Awake')}</div></div></div>`;
+  return `${head(L('健康数据','My data'))}<div class="abody"><div class="aseg">${seg.map(([k,l])=>`<button data-act="dseg" data-v="${k}" aria-pressed="${S.dseg===k}">${l}</button>`).join('')}</div>${c}</div>${tabbar()}`;}
+ if(s==='devices')return `${head(L('我的设备','My devices'),'me')}<div class="abody">
+  <div class="list">${[['bp',L('血压计 BP-200','BP monitor BP-200'),L('已连接 · 08:14 同步 · 电量 80%','Connected · synced 08:14 · 80%'),'ok'],['band',L('智能手环 (HBand)','Smart band (HBand)'),L('后台同步中 · 电量 57%','Background sync · 57%'),'ok'],['cgm','Sinocare CGM',L('API 已授权 · 5 分钟前同步','API linked · synced 5 min ago'),'ok']].map(([i,n,d])=>`<button class="li" ${i==='cgm'?'data-act="cgmgo"':''}><span class="ico">${ic(DVI[i])}</span><span class="tx">${n}<small>${d}</small></span><span class="chev">›</span></button>`).join('')}</div>
+  <button class="abtn" data-act="pairgo">${L('+ 添加设备','+ Add device')}</button>
+  <div class="perm">${L('自动接收：开 · 后台接收：开。关闭后需在测量时手动点击同步。','Receive automatically: on · Receive in background: on. If off, tap sync after each measurement.')}</div></div>${tabbar()}`;
+ if(s==='pair'){const types=[['bp',L('血压计','BP monitor')],['ecg',L('心电卡','ECG card')],['ring',L('智能戒指','Smart ring')],['band',L('智能手环','Smart band')]];
+  let c='';
+  if(S.pair===0)c=`<div class="sub">${L('选择要连接的设备类型','Choose a device type')}</div><div class="list">${types.map(([k,l])=>`<button class="li" data-act="ptype" data-v="${k}"><span class="ico">${ic(DVI[k])}</span><span class="tx">${l}<small>${k==='ring'||k==='band'?'HBand SDK':L('蓝牙','Bluetooth')}</small></span><span class="chev">›</span></button>`).join('')}<button class="li" data-act="cgmgo"><span class="ico">${ic('cgm')}</span><span class="tx">Sinocare CGM<small>${L('账号授权（API）','Account link (API)')}</small></span><span class="chev">›</span></button></div>
+   <div class="perm">${S.os==='ios'?L('首次使用需允许“蓝牙”权限。iOS 会在后台保持与已配对设备的连接。','First use asks for Bluetooth permission. iOS keeps paired devices connected in the background.'):L('Android 12 及以上需允许“附近的设备”权限；部分手机需在电池设置中允许后台运行。','Android 12+ asks for the Nearby devices permission; some phones need background running allowed in battery settings.')}</div>`;
+  else if(S.pair===1)c=`<div class="scan"><div class="ring">${ic(DVI[S.pairType]||'bp',1.5).replace('<svg','<svg style="width:44px;height:44px;color:var(--accent)"')}</div></div><div style="text-align:center"><b>${L('正在搜索…','Searching…')}</b><div class="sub">${L('请打开设备并靠近手机','Turn the device on and hold it near your phone')}</div></div>`;
+  else if(S.pair===2)c=`<div class="sub">${L('找到 1 台设备','Found 1 device')}</div><div class="list"><button class="li" data-act="pconfirm"><span class="ico">${ic(DVI[S.pairType])}</span><span class="tx">${({bp:'BP-200',ecg:'MD100C',ring:'HBand Ring',band:'HBand Band'})[S.pairType]} <small class="num">SN-41915 · RSSI −52</small></span><span class="chip acc">${L('连接','Connect')}</span></button></div>`;
+  else c=`<div class="scan"><div class="ring" style="background:var(--ok-soft);border-color:var(--ok)"><svg viewBox="0 0 24 24" style="width:44px;height:44px" fill="none" stroke="var(--ok)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg></div></div><div style="text-align:center"><b>${L('配对成功','Paired')}</b><div class="sub">${L('新测量会自动上传到诊所','New readings upload to your clinic automatically')}</div></div>
+   <div class="list"><label class="li"><span class="tx">${L('自动接收数据','Receive automatically')}</span><input type="checkbox" checked style="accent-color:var(--accent)"></label><label class="li"><span class="tx">${L('后台接收数据','Receive in background')}</span><input type="checkbox" checked style="accent-color:var(--accent)"></label></div><button class="abtn" data-act="app" data-v="devices">${L('完成','Done')}</button>`;
+  return `${head(L('添加设备','Add device'),'devices')}<div class="abody">${c}</div>`;}
+ if(s==='cgm'){let c='';
+  if(S.cgm===0)c=`<div class="acard" style="align-items:center;text-align:center;gap:10px;padding:20px"><span class="ico" style="width:56px;height:56px;border-radius:16px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center">${ic('cgm').replace('<svg','<svg style="width:30px;height:30px"')}</span><b style="font-size:16px">${L('连接 Sinocare CGM','Connect Sinocare CGM')}</b><span class="sub">${L('授权后，您的连续血糖数据会从 Sinocare 自动同步给您的照护团队，即使不打开本 App 也会持续同步。','After you authorize, your CGM data syncs from Sinocare to your care team automatically, even when this app is closed.')}</span></div>
+   <div class="list"><div class="li"><span class="tx">${L('读取血糖数据','Read glucose readings')}</span>✓</div><div class="li"><span class="tx">${L('读取传感器状态','Read sensor status')}</span>✓</div></div>
+   <button class="abtn" data-act="cgmauth">${L('使用 Sinocare 账号授权','Authorize with Sinocare')}</button><span class="sub" style="text-align:center">${L('可随时在“我的设备”中取消授权','You can unlink any time in My devices')}</span>`;
+  else if(S.cgm===1)c=`<div class="acard" style="gap:12px"><b>${L('Sinocare 账号授权','Sinocare account authorization')}</b><span class="sub">${L('（跳转 Sinocare App 或网页完成登录与授权；此为示意）','(Opens the Sinocare app or web page to sign in and approve; illustrative)')}</span><label class="field"><span>${L('Sinocare 账号','Sinocare account')}</span><input class="input" id="sc" value="9***6621"></label><button class="abtn" data-act="cgmok">${L('同意授权','Approve')}</button></div>`;
+  else c=`<div class="acard" style="background:var(--ok-soft)"><b style="color:var(--ok)">${L('已连接 Sinocare','Sinocare linked')}</b><span class="sub">${L('传感器第 9 天 · 最近同步 5 分钟前 · 已导入 14 天历史数据','Sensor day 9 · synced 5 min ago · 14 days of history imported')}</span></div><div class="acard"><h4>${L('当前血糖','Current glucose')}</h4><span class="num" style="font-size:30px">7.4 <span class="sub">mmol/L →</span></span>${cgmChart(300,150)}</div><button class="abtn ghost" data-act="cgmreset">${L('取消授权','Unlink')}</button>`;
+  return `${head('Sinocare CGM','devices')}<div class="abody">${c}</div>`;}
+
+ if(s==='offer'){const pl=plById('combo'),fee=pl.fee[0];const pay=S.os==='ios'?'Apple Pay':'Google Pay';
+  return `${head(L('开通监测计划','Start your plan'),'login')}<div class="abody">
+  <div class="acard"><span class="sub">${L('李医生为您推荐 · 海湾家庭诊所','Recommended by Dr. Li · Bayview Family Clinic')}</span><span class="sub" style="font-size:11.5px">${L('您通过“安心保险代理团队”的推荐码注册','You signed up with a referral code from Anxin insurance agency')}</span><b style="font-size:17px">${T(pl.n)}</b>
+   <ul style="margin:0;padding-left:18px;font-size:13px;color:var(--muted)">${pl.inc.map(i=>`<li>${T(i)}</li>`).join('')}</ul></div>
+  <div class="acard"><h4>${L('费用明细','Fee breakdown')}</h4><div class="split">
+   <div><span>${L('平台监测、设备与传感器','Monitoring, devices, sensors')}</span><span class="num">${money(pl.pr-fee)}</span></div>
+   <div><span>${L('诊所临床服务费','Clinic service fee')}</span><span class="num">${money(fee)}</span></div>
+   <div class="tot"><span>${L('每月','Per month')}</span><span class="num">${money(pl.pr)}</span></div></div>
+   <span class="sub" style="font-size:11.5px">${L('最短 3 个月，之后可随时取消。计划月费不能用 MediSave 支付；在诊所做的慢病视频复诊可以用 CHAS 和 MediSave。','3-month minimum, then cancel anytime. MediSave cannot pay plan fees; chronic-care video consults at the clinic can use CHAS and MediSave.')}</span></div>
+  <div class="list">${[[pay,1],['PayNow',0],[L('信用卡 / 借记卡','Credit / debit card'),0]].map(([m,on])=>`<label class="li"><input type="radio" name="pm" ${on?'checked':''} style="accent-color:var(--accent)"><span class="tx">${m}</span></label>`).join('')}</div>
+  <button class="abtn" data-act="paid">${L(`支付 ${money(pl.pr)} 并开通`,`Pay ${money(pl.pr)} and start`)}</button>
+  <button class="abtn ghost" data-act="app" data-v="home">${L('稍后再说','Not now')}</button></div>`}
+ if(s==='plan'){const pl=plById('combo');
+  return `${head(L('我的计划','My plan'),'me')}<div class="abody">
+  <div class="acard"><div style="display:flex;align-items:center;gap:8px"><b>${T(pl.n)}</b><span class="chip ok" style="margin-left:auto">${L('生效中','Active')}</span></div>
+   <div class="split"><div><span>${L('月费','Monthly')}</span><span class="num">${money(pl.pr)}</span></div><div><span>${L('下次扣款','Next charge')}</span><span class="num">${L('10月17日','Oct 17')}</span></div><div><span>${L('支付方式','Pay with')}</span><span>PayNow</span></div></div></div>
+  <div class="acard"><h4>${L('传感器配送','Sensor delivery')}</h4><div><b>${L('10月5日寄出 · 2 个 Sinocare 传感器','Ships Oct 5 · 2 Sinocare sensors')}</b><div class="sub">${L('当前传感器第 9 天，10月10日需要更换','Current sensor day 9, replace on Oct 10')}</div></div><div class="stepper"><i class="on"></i><i class="on"></i><i></i><i></i></div></div>
+  <div class="acard"><h4>${L('账单','Receipts')}</h4>${[['10月1日','Oct 1'],['9月1日','Sep 1'],['8月17日','Aug 17']].map(d=>`<div class="li" style="padding:6px 0"><span class="tx">${T(d)}</span><span class="num">${money(pl.pr)}</span><span class="chev">›</span></div>`).join('')}</div>
+  <div class="list"><button class="li"><span class="tx">${L('加购智能手环 / 戒指','Add a band or ring')}</span><span class="chev">›</span></button><button class="li"><span class="tx">${L('变更或暂停计划','Change or pause plan')}</span><span class="chev">›</span></button><button class="li"><span class="tx" style="color:var(--crit)">${L('取消计划','Cancel plan')}</span><span class="chev">›</span></button></div></div>${tabbar()}`}
+ if(s==='consult'){const sl=[['10月3日 周六','Sat Oct 3',['09:30','10:00','11:30']],['10月5日 周一','Mon Oct 5',['14:00','15:30']]];
+  return `${head(L('预约视频复诊','Book a video consult'),'fu')}<div class="abody">
+  <div class="acard"><span class="sub">${L('海湾家庭诊所 · 李医生','Bayview Family Clinic · Dr. Li')}</span><span style="font-size:13px">${L('医生会先看您最近 30 天的血压和血糖数据，再和您视频。','Your doctor reviews your last 30 days of BP and glucose before the call.')}</span></div>
+  ${sl.map(([z,e,ts],di)=>`<div class="acard"><h4>${L(z,e)}</h4><div style="display:flex;gap:8px;flex-wrap:wrap">${ts.map((t,ti)=>`<button class="btn" data-act="toast" data-v="${L('已预约，诊所会在 Plato 确认','Booked; the clinic confirms in Plato')}" ${di===0&&ti===1?'aria-pressed="true" style="border-color:var(--accent);color:var(--accent)"':''}>${t}</button>`).join('')}</div></div>`).join('')}
+  <div class="acard" style="background:var(--surface2)"><span class="sub" style="font-size:12px">${L('复诊费由诊所收取，可用 CHAS 补贴和 MediSave（慢病管理 CDMP）。时间来自诊所 Plato 系统的可约时段。','The clinic charges the consult fee; CHAS and MediSave (CDMP) can apply. Slots come from the clinic’s Plato calendar.')}</span></div></div>${tabbar()}`}
+ if(s==='check'){
+  return `${head(L('14 天 CGM 代谢检查','14-day CGM check'))}<div class="abody">
+  <div class="acard"><span class="sub">${L('明德健康体检中心 · 企业体检套餐','Mingde Health Screening · Corporate package')}</span><div style="display:flex;align-items:baseline;gap:6px"><b style="font-size:30px" class="num">9</b><span class="sub">/ 14 ${L('天','days')}</span></div><div class="stepper">${Array.from({length:14},(_,i)=>`<i class="${i<9?'on':''}"></i>`).join('')}</div><span class="sub">${L('10月6日取下传感器，报告约 2 天后出','Remove the sensor on Oct 6; report about 2 days later')}</span></div>
+  <div class="acard"><h4>${L('今天','Today')}</h4>${cgmChart(300,120)}<span class="sub">${L('记得给每一餐拍照记录，报告会把饮食和血糖对应起来。','Log each meal with a photo; the report matches meals to glucose.')}</span><button class="abtn" style="padding:9px" data-act="toast" data-v="${L('已记录午餐','Lunch logged')}">${L('记录这一餐','Log a meal')}</button></div>
+  <div class="acard" style="background:var(--accent-soft)"><h4>${L('检查结束后','After the check')}</h4><span style="font-size:13px">${L('如果结果需要持续管理，可以直接转为长期血糖计划，由合作 GP 或您自己的家庭医生跟进。','If you need ongoing care, switch to a glucose plan followed by a partner GP or your own family doctor.')}</span><button class="abtn ghost" style="padding:9px" data-act="app" data-v="offer">${L('了解长期计划','See ongoing plans')}</button></div></div>${tabbar()}`}
+ if(s==='fu')return `${head(L('随访','Follow-ups'))}<div class="abody">
+  <div class="acard"><h4>${L('即将进行','Upcoming')}</h4><div><b>${L('10月3日 周六 10:00 · 电话随访','Sat Oct 3, 10:00 · Phone call')}</b><div class="sub">${L('陈护士 · 血压升高后回访','Nurse Chen · after high BP reading')}</div></div><div style="display:flex;gap:8px"><button class="abtn ghost" style="padding:8px" data-act="app" data-v="consult">${L('约视频复诊','Video consult')}</button><button class="abtn" style="padding:8px" data-act="toast" data-v="${L('已加入日历','Added to calendar')}">${L('加入日历','Add to calendar')}</button></div></div>
+  <div class="acard"><h4>${L('待填写问卷','Survey to complete')}</h4><div><b>${L('高血压月度随访问卷','Monthly hypertension survey')}</b><div class="sub">${L('约 2 分钟 · 10月2日前','About 2 min · due Oct 2')}</div></div><button class="abtn" style="padding:9px" data-act="app" data-v="survey">${L('开始填写','Start')}</button></div>
+  <div class="acard"><h4>${L('历史随访','History')}</h4>
+   <div class="li" style="padding:6px 0"><div class="tx"><b style="font-weight:500">${L('9月30日 · 电话随访','Sep 30 · Phone call')}</b><small>${L('医生建议：按时服药，开启服药提醒','Advice: take meds on time, reminder turned on')}</small></div></div>
+   <div class="li" style="padding:6px 0"><div class="tx"><b style="font-weight:500">${L('9月1日 · 门诊','Sep 1 · Clinic visit')}</b><small>${L('二甲双胍调整为 1.0g 每日两次','Metformin changed to 1.0 g twice daily')}</small></div></div></div>
+ </div>${tabbar()}`;
+ if(s==='survey')return `${head(L('随访问卷','Survey'),'fu')}<div class="abody">
+  <div class="sub">${L('高血压月度随访 · 1/1 页','Monthly HTN survey · page 1 of 1')}</div>
+  <div class="q"><b>${L('1. 过去一周是否有头晕、头痛？','1. Any dizziness or headache this week?')}</b><div class="opts">${[L('没有','No'),L('偶尔','Sometimes'),L('经常','Often')].map((o,i)=>`<label><input type="radio" name="q1" ${i===1?'checked':''}>${o}</label>`).join('')}</div></div>
+  <div class="q"><b>${L('2. 过去一周漏服降压药几次？','2. Missed BP pills this week?')}</b><div class="opts">${['0','1–2','3+'].map((o,i)=>`<label><input type="radio" name="q2" ${i===1?'checked':''}>${o}</label>`).join('')}</div></div>
+  <div class="q"><b>${L('3. 是否有胸闷、气短、下肢水肿？','3. Chest tightness, breathlessness or leg swelling?')}</b><div class="opts">${[L('没有','No'),L('有','Yes')].map((o,i)=>`<label><input type="radio" name="q3" ${i===0?'checked':''}>${o}</label>`).join('')}</div></div>
+  <div class="q"><b>${L('4. 每天盐摄入','4. Daily salt intake')}</b><div class="opts">${[L('清淡','Low'),L('一般','Medium'),L('偏咸','High')].map((o,i)=>`<label><input type="radio" name="q4" ${i===1?'checked':''}>${o}</label>`).join('')}</div></div>
+  <label class="q"><b>${L('5. 想告诉医生的话（选填）','5. Anything to tell your doctor? (optional)')}</b><textarea class="input" id="q5" rows="3"></textarea></label>
+  <button class="abtn" data-act="survey">${L('提交','Submit')}</button></div>`;
+ if(s==='msg')return `${head(L('照护团队','Care team'))}<div class="abody" style="gap:8px">
+  <div class="sub" style="text-align:center">${L('今天','Today')}</div>
+  <div class="bubble">${L('陈先生您好，系统显示您今早血压 172/104。请先休息 5 分钟后复测一次，并告诉我是否有头痛或胸闷。','Hello Mr Tan, your BP this morning was 172/104. Please rest 5 minutes, measure again, and tell me if you have a headache or chest tightness.')}<small>${L('陈护士 · 08:21','Nurse Chen · 08:21')}</small></div>
+  <div class="bubble me">${L('复测是 165/100，有点头胀，没有胸闷。昨晚忘了吃药。','Retest was 165/100. Some head pressure, no chest tightness. I forgot my pill last night.')}<small>08:34</small></div>
+  <div class="bubble">${L('好的，请现在服用氨氯地平。下午 4 点我给您打电话随访，如出现胸痛或视物模糊请立即就医。','OK, please take your amlodipine now. I will call you at 4 pm. If you get chest pain or blurred vision, seek care right away.')}<small>${L('陈护士 · 08:36','Nurse Chen · 08:36')}</small></div>
+ </div><div class="chatin"><input class="input" id="chat" placeholder="${L('输入消息','Message')}"><button class="btn pri" data-act="toast" data-v="${L('已发送','Sent')}">${L('发送','Send')}</button></div>`;
+ return `${head(L('我的','Me'))}<div class="abody">
+  <div class="acard" style="flex-direction:row;align-items:center;gap:12px"><span class="avatar">${L('陈','T')}</span><div><b>${L('陈建国','Tan Kian Kok')}</b><div class="sub">${L('海湾家庭诊所 · 高血压 + CGM 管理','Bayview Clinic · HTN + CGM program')}</div></div></div>
+  <div class="list">${[['card',L('我的计划与账单','My plan & billing'),'plan'],['cal',L('预约视频复诊','Book a video consult'),'consult'],['dev',L('我的设备','My devices'),'devices'],['bell',L('提醒','Reminders'),''],['users',L('我的照护团队','My care team'),''],['heart',L('家属共享','Family sharing'),'']].map(([i,l,go])=>`<button class="li" ${go?`data-act="app" data-v="${go}"`:''}><span class="ico">${ic(i)}</span><span class="tx">${l}</span><span class="chev">›</span></button>`).join('')}</div>
+  <div class="list"><div class="li"><span class="tx">${L('语言','Language')}</span><div class="aseg" style="width:120px"><button data-act="lang" data-v="zh" aria-pressed="${S.lang==='zh'}">中文</button><button data-act="lang" data-v="en" aria-pressed="${S.lang==='en'}">EN</button></div></div>
+   <div class="li"><span class="tx">${L('血糖单位','Glucose unit')}</span><span class="sub">mmol/L</span></div>
+   <button class="li"><span class="tx">${L('数据授权与隐私','Data sharing & privacy')}</span><span class="chev">›</span></button></div>
+  <button class="abtn ghost" data-act="app" data-v="login">${L('退出登录','Sign out')}</button></div>${tabbar()}`;
+}
+function appNotes(){
+ const N={
+  login:[L('注册与绑定诊所','Sign-in and clinic link'),L('沿用 MedM 的“诊所码”思路，加入手机号验证码登录与二维码绑定，知情同意在首次登录时签署。','Keeps MedM’s clinic-code idea, adds phone + SMS code and QR join. Consent is signed at first sign-in.')],
+  home:[L('首页 = 今日任务','Home is today’s to-do'),L('把测量、服药、问卷合并为一个清单；护士的告警回访消息置顶。指标卡点击进入对应数据页。','Measurements, meds and surveys merge into one list; nurse messages after an alert pin to the top. Tap a tile to open that data.')],
+  data:[L('健康数据','My data'),L('按指标切换。CGM 显示今天曲线和 14 天 TIR；心电可在 App 内发起 30 秒记录（取决于设备型号）。','Switch by metric. CGM shows today’s trace and 14-day TIR; ECG can start a 30 s record in app, depending on the device.')],
+  devices:[L('我的设备','My devices'),L('沿用 MedM 的“自动接收 / 后台接收”开关。Sinocare CGM 作为 API 授权设备显示在同一列表。','Keeps MedM’s receive-automatically and background switches. Sinocare CGM appears in the same list as an API-linked device.')],
+  pair:[L('蓝牙配对向导','Bluetooth pairing'),L('选类型 → 搜索 → 连接 → 完成。权限提示文案按 iOS / Android 区分（切换左侧平台查看）。点击设备类型可体验流程。','Pick type, search, connect, done. Permission copy differs for iOS and Android (switch platform on the left). Tap a device type to try it.')],
+  cgm:[L('Sinocare CGM 授权','Sinocare CGM link'),L('患者只授权一次：中台用云对云接口持续同步，App 端 API 用于实时显示和补传。具体授权方式待 Sinocare 接口文档确认。','The patient authorizes once: the platform syncs via cloud-to-cloud, and the in-app API shows live readings and backfills. Exact flow depends on Sinocare’s API docs.')],
+  fu:[L('随访（新增）','Follow-ups (new)'),L('患者能看到下次随访时间、待填问卷和医生的随访结论。MedM 参考中没有此模块。','Patients see the next follow-up, surveys to fill and the doctor’s conclusions. MedM has no equivalent.')],
+  survey:[L('随访问卷','Follow-up survey'),L('问卷由诊所在随访模板中配置，结果结构化回传到诊所端随访记录。','Clinics configure surveys in follow-up templates; answers return to the clinic’s follow-up record as structured data.')],
+  msg:[L('与照护团队沟通','Care team chat'),L('告警发生后护士可直接在此联系患者。','After an alert the nurse can reach the patient here.')],
+  offer:[L('开通计划与支付（新增）','Plan checkout (new)'),L('患者登录后看到医生开出的计划。账单把平台费用和诊所临床服务费分开列出，满足费用事先告知的要求。iOS 显示 Apple Pay，Android 显示 Google Pay，两端都支持 PayNow 和银行卡。','After sign-in the patient sees the plan their doctor started. The bill lists platform and clinic service fees separately so costs are disclosed up front. iOS shows Apple Pay, Android shows Google Pay; both support PayNow and cards.')],
+  plan:[L('我的计划（新增）','My plan (new)'),L('续费日期、传感器配送进度、账单和取消入口集中在一页。CGM 计划的传感器按佩戴周期自动寄出。','Renewal date, sensor shipments, receipts and cancel live on one page. CGM sensors ship automatically on the wear cycle.')],
+  consult:[L('视频复诊（新增）','Video consult (new)'),L('时段读取诊所 Plato 的 /appointment/slots，预约写回 Plato。复诊费由诊所收，可用 CHAS 和 MediSave，不走平台支付。','Slots come from Plato /appointment/slots and bookings write back to Plato. The clinic charges the fee, which can use CHAS and MediSave; it does not go through platform payments.')],
+  check:[L('体检中心 14 天检查（新增）','Screening 14-day check (new)'),L('体检客户的轻量模式：只显示检查进度、当天曲线和饮食记录。检查结束后引导转为长期计划。','A light mode for screening clients: progress, today’s trace and meal logging only. At the end it points to an ongoing plan.')],
+  me:[L('我的','Me'),L('语言切换在此（与系统语言同步，可手动改）。家属共享为 P2。','Language switch lives here (follows system, can override). Family sharing is P2.')]
+ };
+ const [h,b]=N[S.app]||N.home;
+ return `<div class="box hl"><b>${h}</b><p>${b}</p></div>
+ <div class="box"><b>${L('iOS 与 Android 差异','iOS vs Android')}</b><p>${L('同一套功能与信息架构。iOS 用大标题和底部标签栏；Android 用 Material 3 顶部栏和带指示条的底部导航；蓝牙权限、后台运行说明按平台区分。','Same features and structure. iOS uses large titles and a tab bar; Android uses a Material 3 top bar and a navigation bar with an active pill. Bluetooth permission and background copy differ per platform.')}</p></div>
+ <div class="box"><b>${L('试一试','Try it')}</b><p>${L('点击底部导航、指标卡、“添加设备”、“去填写”等可在页面间跳转。右上角可切换中英文。','Tap the tab bar, metric tiles, Add device or Start to move between screens. Switch language at the top right.')}</p></div>`;
+}
+
+/* ---------- render + events ---------- */
+const root=document.getElementById('root');
+function render(){
+ document.documentElement.lang=S.lang==='zh'?'zh-CN':'en';
+ let main=S.tab==='spec'?spec():S.tab==='clinic'?clinic():app();
+ root.innerHTML=top()+main+modal()+(S.toast?`<div class="toast" role="status">${S.toast}</div>`:'');
+}
+let tt;function toast(m){S.toast=m;render();clearTimeout(tt);tt=setTimeout(()=>{S.toast=null;render()},2200)}
+let timers=[];const later=(f,ms)=>timers.push(setTimeout(f,ms));
+document.addEventListener('click',e=>{
+ const el=e.target.closest('[data-act]');if(!el)return;
+ if(el.dataset.act==='close'&&e.target.closest('[data-stop]')&&!e.target.closest('button[data-act="close"]'))return;
+ const a=el.dataset.act,v=el.dataset.v;
+ if(el.tagName==='A')e.preventDefault();
+ switch(a){
+  case 'tab':S.tab=v;window.scrollTo(0,0);break;
+  case 'lang':S.lang=v;break;
+  case 'cv':S.cv=v;break;
+  case 'org':S.org=v;S.cv={clinic:'dash',screen:'scr',ops:'nurse',partner:'pstats'}[v];break;
+  case 'rx':S.pid=v;if(el.dataset.pl)S.rxPlan=el.dataset.pl;S.modal='rx';break;
+  case 'rxpl':S.rxPlan=v;break;
+  case 'st':S.st=v;break;
+  case 'sw':el.classList.toggle('on');return;
+  case 'rxrev':S.rxRev=v;break;
+  case 'pt':S.pid=v;S.ptab='overview';S.cv='patient';S.tab='clinic';break;
+  case 'ptab':S.ptab=v;break;
+  case 'os':S.os=v;break;
+  case 'app':S.app=v;S.tab='app';if(v==='pair')S.pair=0;break;
+  case 'dseg':S.dseg=v;S.app='data';break;
+  case 'pairgo':S.app='pair';S.pair=0;break;
+  case 'ptype':S.pairType=v;S.pair=1;later(()=>{if(S.app==='pair'&&S.pair===1){S.pair=2;render()}},1600);break;
+  case 'pconfirm':S.pair=3;break;
+  case 'cgmgo':S.app='cgm';break;
+  case 'cgmauth':S.cgm=1;break;
+  case 'cgmok':S.cgm=2;break;
+  case 'cgmreset':S.cgm=0;break;
+  case 'paid':S.app='home';save();render();toast(L('支付成功，计划已开通','Paid. Your plan is active'));return;
+  case 'survey':S.app='fu';save();render();toast(L('问卷已提交，已同步给陈护士','Survey sent to Nurse Chen'));return;
+  case 'fu':S.modal=v;break;
+  case 'close':S.modal=null;break;
+  case 'ack':{const x=A.find(z=>z.id==+v);x.st='done';save();render();toast(L('告警已处理','Alert resolved'));return}
+  case 'a2f':{const x=A.find(z=>z.id==+v);x.st='fu';const p=pById(x.pid);F.unshift({id:'F'+Date.now(),pid:x.pid,how:'phone',why:['告警触发','Alert-triggered'],what:[`${x.t[0]}：${typeof x.v==='string'?x.v:x.v[0]}`,`${x.t[1]}: ${typeof x.v==='string'?x.v:x.v[1]}`],due:['今天','Today'],col:'today',owner:['陈护士','Nurse Chen']});render();toast(L(`已为${p.n[0]}创建今日随访`,`Follow-up created for ${p.n[1]} today`));return}
+  case 'newpt':toast(L('新建患者表单（示意）','New patient form (illustrative)'));return;
+  case 'toast':toast(v);return;
+ }
+ save();render();
+});
+document.addEventListener('keydown',e=>{
+ if(e.key==='Escape'&&S.modal){S.modal=null;render()}
+ if(e.key==='Enter'&&e.target.matches('tr[data-act]'))e.target.click();
+});
+document.addEventListener('submit',e=>{
+ if(e.target.id==='rxform'){e.preventDefault();S.modal=null;render();toast(L('计划已开出，支付链接已发到患者 App','Plan started; pay link sent to the patient app'));return}
+ if(e.target.id!=='fuform')return;e.preventDefault();
+ const f=F.find(x=>x.id===S.modal);
+ if(f){f.col='done';f.res=['已完成随访，下次 10月8日','Done, next on Oct 8'];S.modal=null;render();toast(L('随访记录已保存','Follow-up note saved'));}
+ else{const p=pById(S.pid);F.push({id:'F'+Date.now(),pid:p.id,how:'phone',why:['临时随访','Ad hoc'],what:[document.getElementById('fu-what').value,document.getElementById('fu-what').value],due:['10月3日','Oct 3'],col:'up',owner:['陈护士','Nurse Chen']});S.modal=null;render();toast(L('随访已创建','Follow-up created'));}
+});
+render();
+})();
+</script>
+
+</body></html>

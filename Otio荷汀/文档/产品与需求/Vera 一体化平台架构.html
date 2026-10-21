@@ -1,0 +1,412 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Vera 一体化平台架构</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700&family=Noto+Sans+SC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  /* 取自《中国传统色》：皦玉 獭见 霁蓝 育阳染 影青 石绿 铜青 银朱 秋香 韎韐 */
+  --bg:#EBEEE8; --surface:#F7F8F4; --surface-2:#E0E5E2; --ink:#151D29; --ink-2:#3C4654; --muted:#576470;
+  --rule:#CDD6DA; --accent:#206864; --accent-2:#3D8E86; --accent-soft:#D6E6E2; --red:#C12C1F; --red-soft:#F3DDD8;
+  --gold:#BF9C46; --warn:#9F5221; --warn-soft:#F1E3D2; --good-soft:#D6E6E2;
+  --serif:"Noto Serif SC","Songti SC","STSong",serif;
+  --sans:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#151D29; --surface:#1C2533; --surface-2:#232E3E; --ink:#EBEEE8; --ink-2:#BDCBD2; --muted:#95A5AF;
+    --rule:#2F3B4C; --accent:#5DA39D; --accent-2:#5DA39D; --accent-soft:#1F3A3A; --red:#E67762; --red-soft:#3D2527;
+    --gold:#D6BC46; --warn:#DA9233; --warn-soft:#3A2E1E; --good-soft:#1F3A3A;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#151D29; --surface:#1C2533; --surface-2:#232E3E; --ink:#EBEEE8; --ink-2:#BDCBD2; --muted:#95A5AF;
+  --rule:#2F3B4C; --accent:#5DA39D; --accent-2:#5DA39D; --accent-soft:#1F3A3A; --red:#E67762; --red-soft:#3D2527;
+  --gold:#D6BC46; --warn:#DA9233; --warn-soft:#3A2E1E; --good-soft:#1F3A3A;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15.5px;line-height:1.75;padding-inline:20px;padding-block:0 64px}
+.wrap{max-width:1160px;margin:0 auto;display:grid;grid-template-columns:1fr;gap:40px}
+@media (min-width:1080px){.wrap{grid-template-columns:210px minmax(0,1fr)}}
+aside.toc{display:none}
+@media (min-width:1080px){aside.toc{display:block;position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;padding-top:56px;font-size:13.5px;line-height:1.5}}
+.toc ol{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.toc a{color:var(--ink-2);text-decoration:none;display:grid;grid-template-columns:22px 1fr}
+.toc a:hover,.toc a:focus-visible{color:var(--accent)}
+.toc .n{font-family:var(--mono);color:var(--muted);font-size:12px;padding-top:1px}
+.toc .label{font-size:11px;letter-spacing:.14em;color:var(--muted);margin-bottom:14px}
+main{max-width:800px;min-width:0}
+header.doc{padding-block:56px 28px;border-bottom:1px solid var(--rule)}
+.eyebrow{font-size:12.5px;letter-spacing:.12em;color:var(--accent);font-weight:500}
+h1{font-family:var(--serif);font-size:clamp(30px,5vw,44px);line-height:1.2;margin:12px 0 16px;text-wrap:balance;font-weight:700}
+.lede{font-size:17px;color:var(--ink-2);max-width:62ch;margin:0}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:20px;font-size:13px;color:var(--muted)}
+.meta b{color:var(--ink-2);font-weight:500}
+.strip{display:grid;grid-template-columns:repeat(24,1fr);height:10px;border-radius:5px;overflow:hidden;margin-top:26px}
+section{padding-top:48px}
+h2{font-family:var(--serif);font-size:27px;line-height:1.3;margin:0 0 6px;text-wrap:balance;display:flex;gap:14px;align-items:baseline}
+h2 .n{font-family:var(--mono);font-size:15px;color:var(--accent);font-weight:500}
+.sub{color:var(--muted);margin:0 0 22px;font-size:14.5px}
+h3{font-size:18px;margin:34px 0 10px;line-height:1.4;text-wrap:balance}
+h4{font-size:15.5px;margin:22px 0 6px}
+p{margin:0 0 14px;max-width:68ch}
+ul,ol{padding-left:1.3em;margin:0 0 14px}
+li{margin:4px 0}
+a{color:var(--accent)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.summary{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:22px 24px;margin-top:28px}
+.summary h2{font-size:21px;margin-bottom:12px}
+.summary ol{margin:0;padding-left:1.4em;display:grid;gap:10px}
+.summary li{margin:0}
+.tbl{overflow-x:auto;margin:14px 0 20px;border:1px solid var(--rule);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.6;min-width:560px}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--rule)}
+tr:last-child td{border-bottom:none}
+th{font-weight:500;color:var(--muted);font-size:12.5px;letter-spacing:.04em;background:var(--surface-2);white-space:nowrap}
+td.k{font-weight:500;white-space:nowrap}
+tr.ours td{background:var(--accent-soft)}
+.pill{display:inline-block;font-size:12px;font-weight:500;padding:1px 9px;border-radius:999px;white-space:nowrap;line-height:1.7}
+.p-keep{background:var(--good-soft);color:var(--accent)}
+.p-fix{background:var(--warn-soft);color:var(--warn)}
+.p-cut{background:var(--red-soft);color:var(--red)}
+.note{border-left:3px solid var(--rule);padding:4px 0 4px 14px;color:var(--ink-2);font-size:14.5px;margin:12px 0 18px}
+.note.bad{border-color:var(--red)}
+.note.warn{border-color:var(--warn)}
+figure{margin:18px 0 24px}
+figcaption{font-size:13px;color:var(--muted);margin-top:8px;max-width:68ch}
+.fig-box{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:18px;overflow-x:auto}
+/* matrix */
+.dot{display:inline-block;width:11px;height:11px;border-radius:50%;vertical-align:-1px}
+.d3{background:var(--accent)}
+.d2{background:transparent;border:2px solid var(--accent)}
+.d1{background:transparent;border:2px dashed var(--muted)}
+.d0{background:transparent;border:1px solid var(--rule);width:9px;height:9px}
+/* concept cards */
+.concepts{display:grid;gap:18px;margin:18px 0 24px}
+.concept{background:var(--surface);border:1px solid var(--rule);border-radius:12px;overflow:hidden}
+.concept .draw{background:var(--surface-2);padding:10px 8px 4px;overflow-x:auto}
+.concept .body{padding:16px 20px 18px}
+.concept h4{margin:0 0 4px;font-family:var(--serif);font-size:19px}
+.concept .tag{font-size:12.5px;color:var(--muted);margin-bottom:10px}
+.concept dl{display:grid;grid-template-columns:72px 1fr;gap:6px 12px;margin:0;font-size:14px}
+.concept dt{color:var(--muted)}
+.concept dd{margin:0}
+svg text{font-family:var(--sans)}
+.sk-line{stroke:var(--ink-2);stroke-width:1.4;fill:none}
+.sk-fill{fill:var(--surface);stroke:var(--ink-2);stroke-width:1.4}
+.sk-lbl{fill:var(--muted);font-size:11.5px}
+/* swatches */
+.sw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin:14px 0 20px}
+.sw{background:var(--surface);border:1px solid var(--rule);border-radius:10px;overflow:hidden;font-size:13px}
+.sw .chip{height:64px}
+.sw .t{padding:8px 10px 10px;line-height:1.45}
+.sw .t b{font-family:var(--serif);font-size:15px;font-weight:700;display:block}
+.sw .t .hx{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.sw .t .u{color:var(--ink-2);font-size:12.5px}
+.jq{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:14px 0 8px}
+@media (min-width:640px){.jq{grid-template-columns:repeat(12,1fr)}}
+.jq div{border-radius:6px;overflow:hidden;background:var(--surface);border:1px solid var(--rule);font-size:11px;line-height:1.3;text-align:center}
+.jq i{display:block;height:34px}
+.jq span{display:block;padding:4px 2px 5px;color:var(--ink-2)}
+.jq span b{display:block;font-weight:500;color:var(--ink)}
+.jq div.now{outline:2px solid var(--ink);outline-offset:1px}
+.themes{display:grid;grid-template-columns:1fr;gap:14px;margin:14px 0 20px}
+@media (min-width:640px){.themes{grid-template-columns:1fr 1fr}}
+.theme{border-radius:12px;padding:16px;border:1px solid var(--rule)}
+.theme h5{margin:0 0 10px;font-family:var(--serif);font-size:16px}
+.theme .row{display:flex;align-items:center;gap:10px;font-size:12.5px;margin:6px 0}
+.theme .row i{width:22px;height:22px;border-radius:5px;flex:none;border:1px solid rgba(128,128,128,.35)}
+.theme .row code{font-family:var(--mono);font-size:11.5px;opacity:.8}
+.t-ink{background:#151D29;color:#EBEEE8}
+.t-xuan{background:#EBEEE8;color:#151D29}
+.checklist{list-style:none;padding:0;display:grid;gap:10px}
+.checklist li{display:grid;grid-template-columns:22px 1fr;gap:8px;margin:0}
+.checklist li::before{content:"";width:14px;height:14px;border:1.6px solid var(--accent);border-radius:3px;margin-top:6px}
+.sources{font-size:13.5px;color:var(--ink-2)}
+.sources li{margin:6px 0;word-break:break-word}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.arch{color:var(--ink-2)}
+.arch .box{fill:var(--surface);stroke:var(--ink-2);stroke-width:1.3}
+.arch .box-acc{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.6}
+.arch .box-src{fill:var(--surface-2);stroke:var(--rule);stroke-width:1.2}
+.arch .t1{fill:var(--ink);font-size:13.5px;font-weight:700}
+.arch .t2{fill:var(--muted);font-size:11.5px}
+.arch .lab{fill:var(--ink-2);font-size:11.5px}
+.arch .lab-acc{fill:var(--accent);font-size:12px;font-weight:700}
+.arch .ln{stroke:var(--ink-2);stroke-width:1.3;fill:none}
+.arch .ln-acc{stroke:var(--accent);stroke-width:2.2;fill:none}
+.arch .ah{fill:var(--ink-2)}
+.arch .ah-acc{fill:var(--accent)}
+.arch .region{fill:none;stroke:var(--rule);stroke-dasharray:4 4}
+.journey{list-style:none;padding:0;margin:0;display:grid;gap:10px;counter-reset:j}
+.journey li{display:grid;grid-template-columns:28px 1fr;gap:8px;margin:0;font-size:14.5px}
+.journey li::before{counter-increment:j;content:counter(j);width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-family:var(--mono);font-size:12px;display:flex;align-items:center;justify-content:center;margin-top:2px}
+.jcard{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:16px 20px;margin:12px 0 18px}
+.jcard h4{margin:0 0 10px;font-family:var(--serif);font-size:17px}
+</style>
+<div class="wrap">
+<aside class="toc" aria-label="目录">
+  <div class="label">目录</div>
+  <ol>
+    <li><a href="#s1"><span class="n">01</span><span>四个前端</span></a></li>
+    <li><a href="#s2"><span class="n">02</span><span>Vera 的两种模式</span></a></li>
+    <li><a href="#s3"><span class="n">03</span><span>两个数据空间</span></a></li>
+    <li><a href="#s4"><span class="n">04</span><span>机构能配置什么</span></a></li>
+    <li><a href="#s5"><span class="n">05</span><span>合规边界</span></a></li>
+    <li><a href="#s6"><span class="n">06</span><span>三个用户场景</span></a></li>
+    <li><a href="#s7"><span class="n">07</span><span>硬件分工与收入</span></a></li>
+    <li><a href="#s8"><span class="n">08</span><span>分阶段上线</span></a></li>
+    <li><a href="#src"><span class="n">··</span><span>资料来源</span></a></li>
+  </ol>
+</aside>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">方案书 · 2026 年 9 月 · 续篇二</div>
+  <h1>一个底座，四个前端</h1>
+  <p class="lede">这份方案回答一个问题：Vera 既要作为 C 端 App 和 Oura、WHOOP、Apple Watch 竞争，又要作为诊所、医院健康管理平台的患者 App，两者应该合并还是分开？下面的架构，是医数云"数据—模型—平台—智能体—应用"体系在患者侧的落地方式。</p>
+  <div class="meta"><span><b>公司</b> BioVision AI Pte. Ltd.（新加坡）· 医数云（南京）人工智能科技有限公司</span><span><b>前篇</b> <a href="https://claude.ai/artifact/JfuCh7oxc6tj53yM4KN5Sp" target="_blank" rel="noopener">戒指方案</a> · <a href="https://claude.ai/artifact/FUv7hs1tRFr9ShzwXmsy2g" target="_blank" rel="noopener">手环与设计系统</a></span></div>
+
+  <div class="summary">
+    <h2>结论</h2>
+    <ol>
+      <li><strong>不完全合并，也不完全分开。</strong>底座只有一个：账号、设备接入、数据、模型和智能体。前端分成四个，各服务一类人。</li>
+      <li><strong>C 端和诊所、保险的高净值客户用同一个 Vera App。</strong>默认是健康模式；用户加入诊所或保险计划后，自动解锁"机构模式"。高净值客户本身就是消费者，他们要的是一个 App，而不是两个。</li>
+      <li><strong>公立医院和基层慢病患者用医院品牌的小程序或 H5，不进 Vera App。</strong>这类患者多是长者，大多没有我们的戒指，医院要用自己的品牌，数据往往还要求留在院内。</li>
+      <li><strong>最关键的一项决定：从第一天起，就按"个人空间和机构空间分开 + 多租户"来设计数据模型。</strong>即使第一年只上线 C 端，这个结构也要先建好，事后再改代价很大。</li>
+    </ol>
+  </div>
+</header>
+
+<figure style="margin-top:32px">
+  <div class="fig-box">
+    <svg class="arch" viewBox="0 0 760 410" width="100%" style="min-width:600px;display:block" role="img" aria-label="四个前端共用一个底座；个人数据和机构数据分开存放，两者之间只能经用户逐次授权流动">
+      <defs>
+        <marker id="ah" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0 L8 4 L0 8 Z" class="ah"/></marker>
+        <marker id="aha" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0 L8 4 L0 8 Z" class="ah-acc"/></marker>
+      </defs>
+      <!-- region -->
+      <rect x="10" y="196" width="740" height="206" rx="10" class="region"/>
+      <text x="104" y="212" class="t2">统一底座：账号 · 租户 · 模型与智能体（中国区、新加坡区各部署一套）</text>
+      <!-- fronts -->
+      <text x="160" y="20" text-anchor="middle" class="t2">Vera App（一个 App）</text>
+      <rect x="20" y="30" width="280" height="64" rx="8" class="box"/>
+      <line x1="160" y1="30" x2="160" y2="94" class="ln"/>
+      <text x="90" y="58" text-anchor="middle" class="t1">个人模式</text>
+      <text x="90" y="78" text-anchor="middle" class="t2">健康 · 所有用户</text>
+      <text x="230" y="58" text-anchor="middle" class="t1">机构模式</text>
+      <text x="230" y="78" text-anchor="middle" class="t2">加入诊所或保险后</text>
+      <rect x="320" y="30" width="130" height="64" rx="8" class="box"/>
+      <text x="385" y="58" text-anchor="middle" class="t1">医院白标</text>
+      <text x="385" y="78" text-anchor="middle" class="t2">小程序 · H5</text>
+      <rect x="470" y="30" width="130" height="64" rx="8" class="box"/>
+      <text x="535" y="58" text-anchor="middle" class="t1">医生工作台</text>
+      <text x="535" y="78" text-anchor="middle" class="t2">医生 · 健康管理师</text>
+      <rect x="620" y="30" width="120" height="64" rx="8" class="box"/>
+      <text x="680" y="58" text-anchor="middle" class="t1">机构后台</text>
+      <text x="680" y="78" text-anchor="middle" class="t2">诊所 · 保险 · 医院</text>
+      <!-- front arrows -->
+      <line x1="90" y1="94" x2="90" y2="219" class="ln" marker-end="url(#ah)"/>
+      <text x="98" y="160" class="lab">两种模式都读写</text>
+      <line x1="230" y1="94" x2="480" y2="219" class="ln" marker-end="url(#ah)"/>
+      <text x="368" y="170" text-anchor="end" class="lab">本人授权内容</text>
+      <line x1="385" y1="94" x2="530" y2="219" class="ln" marker-end="url(#ah)"/>
+      <text x="478" y="170" class="lab">本人记录</text>
+      <line x1="535" y1="94" x2="600" y2="219" class="ln" marker-end="url(#ah)"/>
+      <text x="581" y="170" class="lab">管理签约患者</text>
+      <line x1="680" y1="94" x2="690" y2="219" class="ln" marker-end="url(#ah)"/>
+      <text x="674" y="132" text-anchor="end" class="lab">配置 · 汇总报表</text>
+      <!-- spaces -->
+      <rect x="20" y="222" width="300" height="80" rx="8" class="box"/>
+      <text x="170" y="254" text-anchor="middle" class="t1">个人空间</text>
+      <text x="170" y="276" text-anchor="middle" class="t2">归用户 · 可穿戴 · 习惯 · 自测</text>
+      <rect x="440" y="222" width="300" height="80" rx="8" class="box"/>
+      <text x="590" y="254" text-anchor="middle" class="t1">机构空间</text>
+      <text x="590" y="276" text-anchor="middle" class="t2">归机构 · 病历 · 化验 · 眼底 · 处方</text>
+      <line x1="328" y1="262" x2="432" y2="262" class="ln-acc" marker-start="url(#aha)" marker-end="url(#aha)"/>
+      <text x="380" y="250" text-anchor="middle" class="lab-acc">用户逐次授权</text>
+      <text x="380" y="284" text-anchor="middle" class="lab">可撤回 · 留日志</text>
+      <!-- sources -->
+      <rect x="20" y="340" width="300" height="46" rx="8" class="box-src"/>
+      <text x="170" y="368" text-anchor="middle" class="lab">戒指 · 手环 · 手表 · 血糖仪 · 血压计</text>
+      <rect x="440" y="340" width="300" height="46" rx="8" class="box-src"/>
+      <text x="590" y="368" text-anchor="middle" class="lab">HIS · LIS · PACS · PEIS · 公卫 · 眼底相机</text>
+      <line x1="170" y1="340" x2="170" y2="304" class="ln" marker-end="url(#ah)"/>
+      <text x="178" y="326" class="lab">同步</text>
+      <line x1="590" y1="340" x2="590" y2="304" class="ln" marker-end="url(#ah)"/>
+      <text x="598" y="326" class="lab">接口对接</text>
+    </svg>
+  </div>
+  <figcaption>四个前端共用一个底座。个人数据和机构数据分开存放；医生要看用户的戒指数据，或者用户要把数据发给诊所，都只能经过中间这条用户逐次授权的通道。</figcaption>
+</figure>
+
+<!-- 1 -->
+<section id="s1">
+  <h2><span class="n">01</span>四个前端</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>前端</th><th>给谁用</th><th>品牌</th><th>核心功能</th><th>部署</th></tr></thead>
+    <tbody>
+      <tr><td class="k">Vera App</td><td>个人用户；诊所和保险的高净值客户</td><td>维真 Vera，机构模式下加显合作方标识</td><td>四个分数、设备管理、习惯、家人守护、AI 顾问；机构模式另有报告、处方、随访和问诊</td><td>公有云，中国区与新加坡区分开</td></tr>
+      <tr><td class="k">医院白标前端</td><td>公立医院、社区和基层的慢病患者</td><td>医院自己的品牌，底部注明"技术支持：医数云"</td><td>随访问卷、血压血糖录入、用药提醒、复诊预约、查看报告</td><td>微信小程序或 H5，可以私有化部署</td></tr>
+      <tr><td class="k">医生工作台</td><td>医生、营养师、健康管理师</td><td>医数云</td><td>签约患者列表、风险分层、专病智能体辅助、开具处方、随访计划</td><td>网页端为主，也可以用平板</td></tr>
+      <tr><td class="k">机构后台</td><td>诊所、保险公司、医院的管理员</td><td>医数云</td><td>配置服务包和随访模板、管理成员、查看汇总报表、结算</td><td>网页端</td></tr>
+    </tbody>
+  </table></div>
+  <p>医生工作台和机构后台，就是你们现有的慢病智算管理平台、泛血管智能筛查平台等产品的延伸。新增的部分只是对接 Vera App 的机构模式。</p>
+</section>
+
+<!-- 2 -->
+<section id="s2">
+  <h2><span class="n">02</span>Vera App 的两种模式</h2>
+  <div class="tbl"><table>
+    <thead><tr><th></th><th>个人模式（默认）</th><th>机构模式</th></tr></thead>
+    <tbody>
+      <tr><td class="k">谁</td><td>所有下载 App 的人</td><td>被诊所、保险公司或体检中心邀请的成员</td></tr>
+      <tr><td class="k">怎么进入</td><td>注册即可</td><td>扫邀请二维码、输入邀请码或绑定保单号；一个人可以同时加入多个机构</td></tr>
+      <tr><td class="k">看到什么</td><td>今日、身体、计划、守护、我的</td><td>在个人模式的基础上，"守护"标签多一栏"我的诊所"；"身体"标签多出机构出具的报告，比如眼底、化验和身体年龄</td></tr>
+      <tr><td class="k">医疗内容</td><td>没有。只有健康类指标和建议</td><td>有。每条内容都标注"由某某诊所或医生提供"</td></tr>
+      <tr><td class="k">谁负责</td><td>BioVision / 医数云，作为健康产品</td><td>医疗内容由持证机构和医生负责；平台只提供技术服务</td></tr>
+      <tr><td class="k">谁付费</td><td>用户买硬件，会员可选</td><td>用户、诊所或保险公司，按服务包计费</td></tr>
+      <tr><td class="k">退出之后</td><td>—</td><td>机构数据留在机构，个人数据留给用户；用户可以导出自己的全部数据</td></tr>
+    </tbody>
+  </table></div>
+  <p><strong>你旧 App 的页面怎么安排：</strong>"今日体征"和"生命资产"里的可穿戴部分给所有人；"全维诊室"和生命资产里的眼底、化验只在机构模式下出现；BLACK 会籍变成某家诊所或保险公司的服务包；"FaceID 授权 + 可查看发出范围"的设计原样保留，用作第 3 节的授权通道。</p>
+</section>
+
+<!-- 3 -->
+<section id="s3">
+  <h2><span class="n">03</span>两个数据空间与授权规则</h2>
+  <ul>
+    <li><strong>个人空间归用户</strong>：可穿戴数据、习惯记录、自测数据、用户自己上传的体检报告。用户可以随时导出或删除。</li>
+    <li><strong>机构空间归机构</strong>：病历、化验、眼底影像和筛查结果、处方、随访记录。按医疗数据管理，保存期限和删除规则由机构决定。公立医院可以部署在院内。</li>
+    <li><strong>跨空间一律经用户逐次授权</strong>：每次授权都写明四件事：发什么数据、给谁、看多久、用来做什么。用户可以撤回，每次访问都有日志，用户在 App 里能查到。</li>
+    <li><strong>医生看不到用户的原始戒指数据</strong>，除非用户授权。默认只给医生看摘要，比如近 30 天的静息心率和 HRV 趋势，不给逐分钟数据。</li>
+    <li><strong>保险公司只拿到汇总结果</strong>，比如"本月达标 22 天"，不接触原始数据和病历。这些结果可以用于健康激励，用于核保和定价要非常谨慎，法规和口碑上的风险都大。</li>
+    <li><strong>两个区域互不相通</strong>：中国用户的数据存在中国境内，新加坡和海外用户的数据存在新加坡区，默认不跨境。</li>
+  </ul>
+</section>
+
+<!-- 4 -->
+<section id="s4">
+  <h2><span class="n">04</span>机构能配置什么（多租户）</h2>
+  <p>每家诊所、保险公司或医院都是一个"租户"，可以自行配置以下内容，不需要为每家机构单独开发：</p>
+  <div class="tbl"><table>
+    <thead><tr><th>配置项</th><th>例子</th></tr></thead>
+    <tbody>
+      <tr><td class="k">联合品牌</td><td>机构标识出现在"我的诊所"栏目和报告抬头</td></tr>
+      <tr><td class="k">服务包</td><td>每年 1 次眼底筛查、4 次医生在线咨询、1 份营养处方</td></tr>
+      <tr><td class="k">随访模板</td><td>高血压每月随访，糖尿病每季度复查提醒</td></tr>
+      <tr><td class="k">可见模块</td><td>保险租户只开启健康激励；诊所租户开启处方和问诊</td></tr>
+      <tr><td class="k">数据上报范围</td><td>诊所拿到授权后的摘要；保险公司只拿汇总结果</td></tr>
+      <tr><td class="k">部署方式与区域</td><td>公有云或私有化部署；中国区或新加坡区</td></tr>
+      <tr><td class="k">结算方式</td><td>按人每月、按服务次数、按项目</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 5 -->
+<section id="s5">
+  <h2><span class="n">05</span>合规边界：什么放在哪里</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>功能</th><th>性质</th><th>放在哪里</th><th>谁出具</th></tr></thead>
+    <tbody>
+      <tr><td class="k">元气、睡眠、活动、身体年龄（可穿戴）</td><td><span class="pill p-keep">健康类</span></td><td>个人模式</td><td>算法</td></tr>
+      <tr><td class="k">用户自己上传的体检报告解读</td><td><span class="pill p-keep">健康信息</span></td><td>个人模式</td><td>AI 解释指标含义，建议复查，不作诊断</td></tr>
+      <tr><td class="k">眼底筛查结果（SELENA+）、RetiPhenoAge</td><td><span class="pill p-fix">医疗器械软件输出</span></td><td>机构模式</td><td>机构和医生出具。在中国上线前要确认其国内注册状态</td></tr>
+      <tr><td class="k">心电判读</td><td><span class="pill p-fix">医疗器械</span></td><td>机构模式，或取证后的 Pro 版</td><td>取得注册证后，由医生复核</td></tr>
+      <tr><td class="k">处方、随访计划、在线问诊</td><td><span class="pill p-fix">医疗服务</span></td><td>机构模式</td><td>持证医生出具。在中国需要依托有互联网诊疗资质的医疗机构</td></tr>
+      <tr><td class="k">保险健康激励</td><td><span class="pill p-keep">保险业务</span></td><td>机构模式（保险租户）</td><td>只用汇总结果，用户须同意</td></tr>
+    </tbody>
+  </table></div>
+  <p>这样安排的好处是：<strong>Vera App 本身始终是健康产品</strong>，上架审核和宣传用语都按健康产品处理；医疗责任落在持证的机构和医生身上。这也是 Oura（在 App 内接入 Counsel Health 的医生问诊）和 WHOOP（App 内的验血服务）的做法：消费 App 加上可选的临床服务。</p>
+</section>
+
+<!-- 6 -->
+<section id="s6">
+  <h2><span class="n">06</span>三个用户场景</h2>
+  <div class="jcard">
+    <h4>新加坡 · 保险高净值客户</h4>
+    <ol class="journey">
+      <li>保险公司把 Vera 戒指作为高端保单的权益送给客户。</li>
+      <li>客户下载 Vera，绑定保单号，加入保险租户。平时用的是个人模式。</li>
+      <li>每年到合作诊所做一次眼底筛查，结果进入机构空间，App 里能看到报告和身体年龄。</li>
+      <li>元气分连续两周偏低，App 建议预约医生。客户授权把近 30 天的摘要发给诊所。</li>
+      <li>医生在工作台开出运动和营养处方，处方出现在客户的"守护"标签里。</li>
+      <li>保险公司只看到"本月完成度 80%"，不接触任何原始数据。</li>
+    </ol>
+  </div>
+  <div class="jcard">
+    <h4>中国 · 个人用户</h4>
+    <ol class="journey">
+      <li>在电商平台买戒指，注册 Vera，使用个人模式。</li>
+      <li>静息心率连续两周高于个人基线，App 提示注意休息，并推荐合作体检中心的套餐，页面明确标注这是合作推荐。</li>
+      <li>用户预约体检，体检中心作为租户，把报告写入机构空间。</li>
+      <li>用户在 Vera 里把体检报告和戒指数据放在一起看，体检中心的健康管理师随后跟进。</li>
+    </ol>
+  </div>
+  <div class="jcard">
+    <h4>中国 · 基层慢病患者</h4>
+    <ol class="journey">
+      <li>社区医院的家庭医生签约一位高血压患者，患者在医院的小程序里登记。</li>
+      <li>患者用蓝牙血压计测量，数据进入医院的机构空间，家庭医生在工作台上随访。</li>
+      <li>患者的子女在自己的 Vera App 里使用"家人守护"。经患者本人授权后，子女可以看到父母的血压趋势和复诊提醒。</li>
+    </ol>
+  </div>
+  <p>第三个场景里，Vera App 和医院小程序通过授权连在一起，但不是同一个 App。这正是"一个底座、多个前端"的价值所在。</p>
+</section>
+
+<!-- 7 -->
+<section id="s7">
+  <h2><span class="n">07</span>硬件分工与收入来源</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>硬件</th><th>角色</th><th>主要渠道</th></tr></thead>
+    <tbody>
+      <tr><td class="k">Vera 戒指</td><td>高端 C 端，睡眠和恢复数据最好</td><td>电商、官网、保险高端权益</td></tr>
+      <tr><td class="k">Vera 手环</td><td>走量、控成本，运动数据最好</td><td>诊所和保险批量采购、戒指套装</td></tr>
+      <tr><td class="k">第三方设备</td><td>血压计、血糖仪、带屏手环、Apple Watch</td><td>基层慢病用成熟的第三方设备，不为每个渠道都自研硬件</td></tr>
+    </tbody>
+  </table></div>
+  <div class="tbl"><table>
+    <thead><tr><th>收入</th><th>谁付费</th><th>形式</th></tr></thead>
+    <tbody>
+      <tr><td class="k">硬件与表带</td><td>用户</td><td>一次性购买，表带复购</td></tr>
+      <tr><td class="k">元气+ 会员</td><td>用户</td><td>可选，按月或按年</td></tr>
+      <tr><td class="k">诊所服务包</td><td>用户或诊所</td><td>按次或按年</td></tr>
+      <tr><td class="k">机构 SaaS</td><td>诊所、体检中心</td><td>按年，或按签约人数</td></tr>
+      <tr><td class="k">保险合作</td><td>保险公司</td><td>按会员人数每月计费，外加设备批量采购</td></tr>
+      <tr><td class="k">医院项目</td><td>公立医院</td><td>项目制或私有化部署</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 8 -->
+<section id="s8">
+  <h2><span class="n">08</span>分阶段上线</h2>
+  <div class="tbl timeline"><table>
+    <thead><tr><th>阶段</th><th>上线内容</th><th>关键点</th></tr></thead>
+    <tbody>
+      <tr><td class="k">第 0–12 月</td><td>Vera App 个人模式 + 戒指，新加坡和中国同时上线</td><td>数据模型一开始就按"两个空间 + 多租户"设计，机构模式先不开放</td></tr>
+      <tr><td class="k">第 6–15 月</td><td>新加坡试点机构模式：1–2 家诊所、1 家保险公司；EyRIS 眼底结果接入 App；医生工作台对接 Vera</td><td>先在高净值人群里验证服务包的付费意愿</td></tr>
+      <tr><td class="k">第 12–24 月</td><td>国内私立体检中心和高端诊所接入机构模式；医院白标小程序与现有慢病平台打通；家人守护可以跨前端授权</td><td>公立医院按项目推进，Vera App 不作为公立医院的主入口</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note warn">最需要提前决定的一件事：把"两个数据空间 + 多租户 + 逐次授权"写进第一版的数据模型和后端设计。其余功能都可以晚一点上线，这一项推迟的话，以后要重构账号和数据。</p>
+</section>
+
+<section id="src">
+  <h2><span class="n">··</span>资料来源</h2>
+  <ul class="sources">
+    <li><a href="https://techcrunch.com/2026/05/28/oura-unveils-its-ring-5-with-a-thinner-lighter-design-starting-at-399/" target="_blank" rel="noopener">Oura Ring 5 与 Counsel Health 医生服务 — TechCrunch</a></li>
+    <li><a href="https://www.whoop.com/us/en/thelocker/guide-to-self-experimentation-whoop-journal/" target="_blank" rel="noopener">WHOOP Advanced Labs（App 内验血）— WHOOP</a></li>
+    <li><a href="https://horn-hash-49956009.figma.site/" target="_blank" rel="noopener">Vera Ring App 原设计稿（Figma 原型）</a></li>
+    <li><a href="https://developer.apple.com/app-store/review/guidelines/" target="_blank" rel="noopener">App Store Review Guidelines 1.4.1 — Apple</a></li>
+  </ul>
+</section>
+</main>
+</div>
+
+</body></html>

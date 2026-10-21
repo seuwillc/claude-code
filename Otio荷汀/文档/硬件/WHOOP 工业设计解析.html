@@ -1,0 +1,620 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>WHOOP 工业设计解析</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700;900&display=swap">
+<style>
+/* Layout concept: a set of drafting sheets. Each figure is a bordered sheet with a title block; prose stays in a narrow column between sheets. */
+:root{
+  --f-body:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --paper:#E8EDF0;
+  --sheet:#F6F8F9;
+  --ink:#11181C;
+  --ink-2:#4B5961;
+  --rule:#9CA9B0;
+  --grid:#DCE3E7;
+  --fill:#DFE6EA;
+  --fill-2:#C6D1D7;
+  --accent:#0A6B7C;
+  --mark:#A8500B;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0D1215;--sheet:#141B1F;--ink:#E5ECEF;--ink-2:#95A4AC;--rule:#38464E;--grid:#1D272C;--fill:#1E2A30;--fill-2:#2D3C45;--accent:#5CC6D6;--mark:#F0A266;color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0D1215;--sheet:#141B1F;--ink:#E5ECEF;--ink-2:#95A4AC;--rule:#38464E;--grid:#1D272C;--fill:#1E2A30;--fill-2:#2D3C45;--accent:#5CC6D6;--mark:#F0A266;color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:400 15.5px/1.8 var(--f-body);-webkit-text-size-adjust:100%}
+.wrap{max-width:1020px;margin:0 auto;padding-inline:clamp(16px,4vw,32px);padding-block:28px 72px}
+a{color:var(--accent);text-underline-offset:3px}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+p{margin:0}
+h1,h2,h3{margin:0;text-wrap:balance}
+
+.hero{background-color:var(--sheet);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:24px 24px;border:1px solid var(--rule);padding:clamp(20px,4vw,36px)}
+.kick{font:500 11.5px/1.4 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+h1{font-weight:900;font-size:clamp(30px,6.2vw,54px);line-height:1.12;margin-top:10px;letter-spacing:-.01em}
+.lede{max-width:40em;margin-top:16px;font-size:16.5px}
+.scope{max-width:44em;margin-top:14px;font-size:13.5px;color:var(--ink-2);line-height:1.7}
+.specs{display:grid;grid-template-columns:repeat(auto-fit,minmax(138px,1fr));margin-top:26px;border-top:1px solid var(--rule)}
+.spec{padding:12px 12px 4px 0}
+.spec b{display:block;font:500 20px/1.3 var(--f-mono);letter-spacing:-.01em}
+.spec span{font-size:12.5px;color:var(--ink-2)}
+
+section{margin-top:60px}
+h2{font-weight:700;font-size:clamp(22px,3.4vw,28px);line-height:1.3;margin-top:6px}
+.lead{max-width:40em;margin-top:12px}
+
+.sheet{margin:22px 0 0;background:var(--sheet);border:1px solid var(--rule)}
+.scroll{overflow-x:auto;padding:14px}
+.sheet svg{display:block;width:100%;min-width:600px;height:auto}
+.tb{display:flex;flex-wrap:wrap;border-top:1px solid var(--rule);font-size:13px;line-height:1.6}
+.tb .no{font:500 12px/1.6 var(--f-mono);padding:9px 14px;border-right:1px solid var(--rule);color:var(--accent)}
+.tb .cap{flex:1 1 260px;min-width:0;padding:9px 14px}
+.tb .basis{font:400 11.5px/1.6 var(--f-mono);padding:9px 14px;color:var(--mark);flex:0 1 auto}
+
+/* svg vocabulary */
+.sheet svg text{font-family:var(--f-body);font-size:13px;fill:var(--ink)}
+.sheet svg .b{font-weight:700}
+.sheet svg .sm{font-size:11.5px;fill:var(--ink-2)}
+.sheet svg .m{font-family:var(--f-mono)}
+.sheet svg .acc{fill:var(--accent)}
+.sheet svg .mk{fill:var(--mark)}
+.sheet svg .big{font-size:32px;font-weight:500}
+.ln{fill:none;stroke:var(--ink);stroke-width:1.4;stroke-linejoin:round}
+.part{fill:var(--fill);stroke:var(--ink);stroke-width:1.4;stroke-linejoin:round}
+.part2{fill:var(--fill-2);stroke:var(--ink);stroke-width:1.4;stroke-linejoin:round}
+.thin{fill:none;stroke:var(--ink-2);stroke-width:1}
+.dash{stroke-dasharray:4 4}
+.dim{fill:none;stroke:var(--accent);stroke-width:1}
+.arrow{fill:none;stroke:var(--accent);stroke-width:1.6}
+.mk-fill{fill:var(--accent)}
+.knitln{stroke:var(--ink-2);stroke-width:.7}
+.vessel{fill:var(--accent);opacity:.65}
+.bandk{fill:none;stroke:var(--ink-2);stroke-width:7}
+.bandd{fill:none;stroke:var(--sheet);stroke-width:7;stroke-dasharray:1.5 4}
+.key{fill:var(--sheet);stroke:var(--accent);stroke-width:1.4}
+.seg-a{fill:var(--fill-2);stroke:var(--ink);stroke-width:1}
+.seg-b{fill:var(--fill);stroke:var(--ink);stroke-width:1}
+.seg-c{fill:var(--accent);stroke:var(--ink);stroke-width:1}
+.sheet svg .onacc{fill:var(--sheet)}
+
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:22px 32px;margin-top:22px}
+.note{border-top:2px solid var(--ink);padding-top:10px;min-width:0}
+.note h3{font-size:15.5px;font-weight:700;line-height:1.5}
+.note p{margin-top:4px;font-size:14.5px;line-height:1.75;color:var(--ink-2)}
+.note .k{font:500 12px var(--f-mono);color:var(--accent);margin-right:6px}
+
+.tbl{overflow-x:auto;margin-top:22px;border:1px solid var(--rule);background:var(--sheet)}
+table{border-collapse:collapse;width:100%;min-width:600px;font-size:14px;line-height:1.65}
+th{font:500 11.5px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;text-align:left;padding:10px 14px;border-bottom:1px solid var(--rule);color:var(--ink-2);white-space:nowrap}
+td{padding:10px 14px;border-bottom:1px solid var(--grid);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td:first-child{font-weight:700;white-space:nowrap}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+.swatches{display:flex;flex-wrap:wrap;gap:12px;margin-top:22px}
+.sw{width:92px}
+.chip{height:58px;border:1px solid var(--rule);border-radius:3px}
+.sw b{display:block;font-size:12.5px;margin-top:6px;line-height:1.4}
+.sw span{font:400 11px var(--f-mono);color:var(--ink-2)}
+.fine{font-size:12.5px;color:var(--mark);margin-top:10px}
+
+.score{margin-top:22px;border:1px solid var(--rule);background:var(--sheet)}
+.row{display:grid;grid-template-columns:170px 96px 1fr;gap:6px 18px;padding:12px 16px;border-bottom:1px solid var(--grid);align-items:start}
+.row:last-child{border-bottom:0}
+.row b{font-size:14.5px}
+.row p{font-size:14px;color:var(--ink-2);line-height:1.7;min-width:0}
+.dots{display:flex;gap:5px;padding-top:7px}
+.dots i{width:12px;height:12px;border-radius:50%;border:1.5px solid var(--rule)}
+.dots i.on{background:var(--accent);border-color:var(--accent)}
+@media (max-width:640px){.row{grid-template-columns:1fr}.dots{padding-top:0}}
+
+.list{margin:18px 0 0;padding:0;list-style:none;display:grid;gap:14px;max-width:46em}
+.list li{padding-left:18px;position:relative;font-size:15px}
+.list li::before{content:"";position:absolute;left:0;top:.8em;width:8px;height:2px;background:var(--accent)}
+.list b{font-weight:700}
+
+.src{margin-top:60px;padding-top:18px;border-top:1px solid var(--rule);font-size:13px;line-height:1.9;color:var(--ink-2)}
+.src ul{margin:8px 0 0;padding-left:1.2em}
+.src li{overflow-wrap:anywhere}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1 L9,5 L0,9 z" class="mk-fill"/></marker>
+    <marker id="dm" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,2 L10,5 L0,8 z" class="mk-fill"/></marker>
+    <pattern id="knit" width="6" height="6" patternUnits="userSpaceOnUse"><path d="M0,6 L6,0" class="knitln"/></pattern>
+  </defs>
+</svg>
+
+<div class="wrap">
+
+<header class="hero">
+  <div class="kick">Industrial design review · WHOOP 5.0 / MG</div>
+  <h1>WHOOP 5.0 / MG 工业设计解析</h1>
+  <p class="lede">WHOOP 5.0 的设计围绕一次取舍展开：去掉屏幕和按键，把主机压到 34.7 × 24 × 10.6 mm，让续航、佩戴感和连续数据排在第一位。辨识度与质感交给织物表带和金属扣件，功能档位再通过表带、充电包和机身材质来区分。</p>
+  <p class="scope">依据 WHOOP 官网会员页、公开评测和第三方拆解整理，整理于 2026-10-03。图中标注「示意」的外形与叠层来自资料推断，不是 CAD 数据或实物测量。</p>
+  <div class="specs">
+    <div class="spec"><b>34.7×24×10.6</b><span>主机尺寸 mm</span></div>
+    <div class="spec"><b>26.5 g</b><span>含表带总重</span></div>
+    <div class="spec"><b>IP68</b><span>防水 10 m</span></div>
+    <div class="spec"><b>14+ 天</b><span>官方续航口径</span></div>
+    <div class="spec"><b>0</b><span>屏幕与按键数量</span></div>
+    <div class="spec"><b>24 mm</b><span>织带宽度</span></div>
+  </div>
+</header>
+
+<!-- ============ 1 SYSTEM ============ -->
+<section>
+  <div class="kick">System</div>
+  <h2>产品是一套系统，手腕上只有两件</h2>
+  <p class="lead">会员页把 WHOOP 拆成主机、表带、充电器和 App 四个部分，再用年费把它们绑在一起。戴在身上的只有主机和表带，显示、数据解读和付费关系都在手机一侧。</p>
+
+  <figure class="sheet">
+    <div class="scroll">
+    <svg viewBox="0 0 720 370" role="img" aria-label="WHOOP 5.0 系统关系图：表带与主机组成佩戴部分，充电包给主机无线充电，主机通过蓝牙同步到手机 App，App 连接会员订阅">
+      <rect class="thin dash" x="14" y="72" width="350" height="278" rx="14"/>
+      <text class="sm" x="28" y="96">戴在身上的部分</text>
+      <rect class="thin dash" x="420" y="72" width="290" height="278" rx="14"/>
+      <text class="sm" x="434" y="96">显示与价值所在</text>
+
+      <rect class="part" x="24" y="140" width="90" height="62" rx="10"/>
+      <text class="b" x="69" y="167" text-anchor="middle">表带</text>
+      <text class="sm" x="69" y="187" text-anchor="middle">织带 24 mm</text>
+
+      <line class="ln" x1="114" y1="171" x2="210" y2="171"/>
+      <text class="sm" x="162" y="160" text-anchor="middle">Fast Link 滑扣</text>
+
+      <rect class="part2" x="210" y="128" width="130" height="86" rx="26"/>
+      <text class="b" x="275" y="164" text-anchor="middle">主机</text>
+      <text class="sm" x="275" y="186" text-anchor="middle">34.7×24×10.6 mm</text>
+
+      <rect class="part" x="215" y="270" width="120" height="60" rx="16"/>
+      <text class="b" x="275" y="297" text-anchor="middle">充电包</text>
+      <text class="sm" x="275" y="315" text-anchor="middle">约 2 小时充满</text>
+      <line class="arrow" x1="275" y1="268" x2="275" y2="218" marker-end="url(#ah)"/>
+      <text class="sm" x="287" y="246">戴着充电</text>
+
+      <line class="arrow" x1="342" y1="171" x2="438" y2="171" marker-end="url(#ah)"/>
+      <text class="sm" x="390" y="160" text-anchor="middle">蓝牙同步</text>
+
+      <rect class="part" x="440" y="116" width="90" height="190" rx="18"/>
+      <line class="thin" x1="470" y1="128" x2="500" y2="128"/>
+      <text class="b" x="485" y="206" text-anchor="middle">手机 App</text>
+      <text class="sm" x="485" y="226" text-anchor="middle">唯一的显示界面</text>
+
+      <line class="arrow" x1="532" y1="193" x2="588" y2="193" marker-end="url(#ah)"/>
+      <text class="sm" x="560" y="182" text-anchor="middle">订阅解锁</text>
+
+      <rect class="part2" x="590" y="150" width="108" height="86" rx="12"/>
+      <text class="b" x="644" y="186" text-anchor="middle">会员订阅</text>
+      <text class="sm" x="644" y="208" text-anchor="middle">$199–359/年</text>
+    </svg>
+    </div>
+    <figcaption class="tb"><span class="no">FIG.01</span><span class="cap">没有屏幕，所以主机之外的一切交互都发生在手机上。</span><span class="basis">依据：官网会员页 · 公开评测</span></figcaption>
+  </figure>
+
+  <div class="notes">
+    <div class="note"><h3>主机是唯一的电子核心</h3><p>传感、电池、蓝牙和震动都在这一块主机里，表带只有织物和金属件。</p></div>
+    <div class="note"><h3>充电不打断佩戴</h3><p>Peak 与 Life 附带无线充电包，可以在手腕上给主机补电；One 附带有线基础充电器。</p></div>
+    <div class="note"><h3>显示全部交给手机</h3><p>官网图里的 Healthspan 页面用绿色粒子球显示 WHOOP Age，和黑色硬件形成明暗对照，品牌的色彩集中在 App 里。</p></div>
+  </div>
+</section>
+
+<!-- ============ 2 FORM ============ -->
+<section>
+  <div class="kick">Form &amp; dimensions</div>
+  <h2>主机：一块没有显示面的黑色圆角块</h2>
+  <p class="lead">5.0 与 MG 都比 4.0 小 7%，没有屏幕和按键，造型语言只剩圆角矩形和 W 标识。W 标识在官网图中出现在金属扣条和充电包上。</p>
+
+  <figure class="sheet">
+    <div class="scroll">
+    <svg viewBox="0 0 720 410" role="img" aria-label="WHOOP 5.0 主机三视图示意：顶视 34.7 乘 24 毫米，侧视厚 10.6 毫米，底视为贴肤面光学窗口">
+      <line class="thin dash" x1="56" y1="152" x2="362" y2="152"/>
+      <line class="thin dash" x1="208.8" y1="44" x2="208.8" y2="262"/>
+      <rect class="part" x="70" y="56" width="277.6" height="192" rx="40"/>
+      <rect class="thin" x="79" y="65" width="259.6" height="174" rx="32"/>
+      <line class="thin" x1="70" y1="40" x2="70" y2="54"/>
+      <line class="thin" x1="347.6" y1="40" x2="347.6" y2="54"/>
+      <line class="dim" x1="70" y1="36" x2="347.6" y2="36" marker-start="url(#dm)" marker-end="url(#dm)"/>
+      <text class="m acc" x="208.8" y="26" text-anchor="middle">34.7 mm</text>
+      <line class="thin" x1="40" y1="56" x2="68" y2="56"/>
+      <line class="thin" x1="40" y1="248" x2="68" y2="248"/>
+      <line class="dim" x1="46" y1="56" x2="46" y2="248" marker-start="url(#dm)" marker-end="url(#dm)"/>
+      <text class="m acc" x="34" y="152" text-anchor="middle" transform="rotate(-90 34 152)">24 mm</text>
+      <text class="sm" x="70" y="270">顶视 TOP</text>
+
+      <line class="thin dash" x1="208.8" y1="288" x2="208.8" y2="394"/>
+      <text class="sm" x="70" y="288">侧视 SIDE · 皮肤面向下</text>
+      <rect class="part" x="70" y="296" width="277.6" height="64" rx="14"/>
+      <path class="part2" d="M114,360 Q208.8,402 303.6,360 Z"/>
+      <line class="thin" x1="350" y1="296" x2="380" y2="296"/>
+      <line class="thin dash" x1="216" y1="381" x2="380" y2="381"/>
+      <line class="dim" x1="374" y1="296" x2="374" y2="381" marker-start="url(#dm)" marker-end="url(#dm)"/>
+      <text class="m acc" x="384" y="343">10.6 mm</text>
+
+      <rect class="part" x="430" y="56" width="277.6" height="192" rx="40"/>
+      <rect class="part2" x="480" y="96" width="177.6" height="112" rx="30"/>
+      <circle class="ln" cx="514.8" cy="132" r="7"/><circle class="ln" cx="550.8" cy="132" r="7"/><circle class="ln" cx="586.8" cy="132" r="7"/><circle class="ln" cx="622.8" cy="132" r="7"/>
+      <circle class="ln" cx="514.8" cy="172" r="7"/><circle class="ln" cx="550.8" cy="172" r="7"/><circle class="ln" cx="586.8" cy="172" r="7"/><circle class="ln" cx="622.8" cy="172" r="7"/>
+      <text class="sm" x="430" y="48">底视 SKIN SIDE</text>
+      <line class="thin" x1="568.8" y1="208" x2="568.8" y2="268"/>
+      <text class="mk" x="568.8" y="286" text-anchor="middle">光学窗口（示意）</text>
+      <text class="sm" x="568.8" y="303" text-anchor="middle">心率 · SpO₂ · 肤温</text>
+
+      <text class="m acc big" x="480" y="358">−7%</text>
+      <text class="sm" x="480" y="378">较 4.0 缩小</text>
+      <text class="m acc big" x="592" y="358">26.5 g</text>
+      <text class="sm" x="592" y="378">含表带总重</text>
+    </svg>
+    </div>
+    <figcaption class="tb"><span class="no">FIG.02</span><span class="cap">尺寸取自公开规格，圆角、贴肤面弧度和光学窗口布局为示意，比例约 8 : 1。</span><span class="basis">依据：公开规格 · 外形示意</span></figcaption>
+  </figure>
+
+  <div class="notes">
+    <div class="note"><h3>体量</h3><p>10.6 mm 的厚度和 26.5 g 的总重，让它更接近一块传感器，而不是一块手表。</p></div>
+    <div class="note"><h3>没有显示面</h3><p>顶面没有任何界面元素，造型只靠圆角矩形的比例成立，细节全部收进材质和表面处理。</p></div>
+    <div class="note"><h3>贴肤面</h3><p>光学窗口负责心率、SpO₂ 与肤温采样。第三方拆解认为 5.0 的传感器硬件与 4.0 相近，升级主要在采样与电源管理。</p></div>
+  </div>
+</section>
+
+<!-- ============ 3 STACK ============ -->
+<section>
+  <div class="kick">Internal stack</div>
+  <h2>内部叠层：MG 只多了一块 ECG 电路</h2>
+  <p class="lead">5.0 与 MG 的内部几乎相同。MG 换用修订版主板，增加 ECG 模拟前端，电极则设在表带扣件上，所以 MG 要读 ECG 必须搭配 ECG 兼容表带。</p>
+
+  <figure class="sheet">
+    <div class="scroll">
+    <svg viewBox="0 0 720 430" role="img" aria-label="WHOOP 主机叠层爆炸示意图，从上到下依次为上盖、主板、电池、传感器板、底壳与光学窗口">
+      <line class="thin dash" x1="360" y1="56" x2="360" y2="368"/>
+
+      <!-- L5 底壳 -->
+      <polygon class="part" points="360,336 490,368 360,400 230,368"/>
+      <polygon class="part" points="230,368 360,400 360,414 230,382"/>
+      <polygon class="part2" points="360,400 490,368 490,382 360,414"/>
+      <polygon class="thin" style="fill:var(--fill-2)" points="360,352 410,368 360,384 310,368"/>
+      <!-- L4 传感器板 -->
+      <polygon class="part" points="360,258 490,290 360,322 230,290"/>
+      <polygon class="part" points="230,290 360,322 360,328 230,296"/>
+      <polygon class="part2" points="360,322 490,290 490,296 360,328"/>
+      <!-- L3 电池 -->
+      <polygon class="part" points="360,180 490,212 360,244 230,212"/>
+      <polygon class="part" points="230,212 360,244 360,260 230,228"/>
+      <polygon class="part2" points="360,244 490,212 490,228 360,260"/>
+      <!-- L2 主板 -->
+      <polygon class="part" points="360,102 490,134 360,166 230,134"/>
+      <polygon class="part" points="230,134 360,166 360,172 230,140"/>
+      <polygon class="part2" points="360,166 490,134 490,140 360,172"/>
+      <polygon class="thin" style="fill:var(--fill-2)" points="330,126 354,138 330,150 306,138"/>
+      <polygon class="thin" style="fill:var(--fill-2)" points="404,130 424,140 404,150 384,140"/>
+      <!-- L1 上盖 -->
+      <polygon class="part" points="360,24 490,56 360,88 230,56"/>
+      <polygon class="part" points="230,56 360,88 360,100 230,68"/>
+      <polygon class="part2" points="360,88 490,56 490,68 360,100"/>
+
+      <line class="thin" x1="490" y1="56" x2="512" y2="56"/>
+      <text class="b" x="520" y="50">上盖 · 外壳</text>
+      <text class="sm" x="520" y="66">5.0：黑色主机</text>
+      <text class="sm" x="520" y="81">MG：报道为镁合金机身</text>
+
+      <line class="thin" x1="490" y1="134" x2="512" y2="134"/>
+      <text class="b" x="520" y="128">主板 · 处理与无线</text>
+      <text class="sm" x="520" y="144">电量计 · 稳压器（拆解）</text>
+      <text class="sm" x="520" y="159">含惯性传感与震动马达</text>
+
+      <line class="thin" x1="490" y1="212" x2="512" y2="212"/>
+      <text class="b" x="520" y="206">电池 · 锂离子</text>
+      <text class="sm" x="520" y="222">14+ 天续航</text>
+      <text class="sm" x="520" y="237">4.0 约 4–5 天</text>
+
+      <line class="thin" x1="490" y1="290" x2="512" y2="290"/>
+      <text class="b" x="520" y="284">传感器板</text>
+      <text class="sm" x="520" y="300">光学心率 · SpO₂ · 肤温</text>
+      <text class="sm" x="520" y="315">与 4.0 器件相近（拆解）</text>
+
+      <line class="thin" x1="490" y1="368" x2="512" y2="368"/>
+      <text class="b" x="520" y="362">底壳 · 光学窗口</text>
+      <text class="sm" x="520" y="378">贴肤面微凸</text>
+      <text class="sm" x="520" y="393">IP68 防水（10 m）</text>
+
+      <line class="thin" x1="230" y1="134" x2="216" y2="134"/>
+      <text class="mk b" x="208" y="124" text-anchor="end">MG 专有</text>
+      <text class="sm" x="208" y="141" text-anchor="end">修订版主板</text>
+      <text class="sm" x="208" y="156" text-anchor="end">增加 ECG 模拟前端</text>
+
+      <text class="mk" x="208" y="196" text-anchor="end">叠层顺序与厚度</text>
+      <text class="mk" x="208" y="212" text-anchor="end">依资料推断</text>
+      <text class="mk" x="208" y="228" text-anchor="end">非实测</text>
+
+      <line class="thin" x1="230" y1="290" x2="216" y2="290"/>
+      <text class="b" x="208" y="284" text-anchor="end">5.0 / MG</text>
+      <text class="sm" x="208" y="300" text-anchor="end">光学传感器相同</text>
+      <text class="sm" x="208" y="315" text-anchor="end">（第三方拆解）</text>
+    </svg>
+    </div>
+    <figcaption class="tb"><span class="no">FIG.03</span><span class="cap">从外壳到贴肤面共五层，MG 的差异集中在主板这一层和表带扣件。</span><span class="basis">依据：第三方拆解 · FCC 备案推断 · 叠层示意</span></figcaption>
+  </figure>
+
+  <div class="notes">
+    <div class="note"><h3>差异不外露</h3><p>从外面看，5.0 与 MG 的主机几乎无法区分，医疗级功能没有改变形态，只多了一条专用表带。</p></div>
+    <div class="note"><h3>电源管理是重点</h3><p>拆解记录了电量计和稳压器，媒体报道称处理器能效提升约 10 倍，这是 14+ 天续航的内部基础。</p></div>
+  </div>
+</section>
+
+<!-- ============ 4 ERGONOMICS ============ -->
+<section>
+  <div class="kick">Ergonomics</div>
+  <h2>佩戴：靠织带的张力维持光学接触</h2>
+  <p class="lead">主机本身没有任何固定结构，贴肤面能不能稳定接触皮肤，取决于表带的松紧与位置。所以这套设计的人机重点是表带，不在主机。</p>
+
+  <figure class="sheet">
+    <div class="scroll">
+    <svg viewBox="0 0 720 300" role="img" aria-label="手腕横截面示意：主机位于手腕上方，贴肤面向皮下血管发射光线，弹性织带环绕手腕提供张力">
+      <g transform="translate(160,-15)">
+        <ellipse class="bandk" cx="200" cy="195" rx="121" ry="93"/>
+        <ellipse class="bandd" cx="200" cy="195" rx="121" ry="93"/>
+        <ellipse class="part" cx="200" cy="195" rx="112" ry="84"/>
+        <ellipse class="thin" cx="170" cy="222" rx="17" ry="13"/>
+        <ellipse class="thin" cx="232" cy="228" rx="13" ry="11"/>
+        <circle class="vessel" cx="172" cy="162" r="4"/><circle class="vessel" cx="200" cy="166" r="4"/><circle class="vessel" cx="228" cy="162" r="4"/>
+        <rect class="part2" x="166" y="96" width="68" height="22" rx="8"/>
+        <path class="part2" d="M176,118 Q200,134 224,118 Z"/>
+        <line class="arrow" x1="186" y1="129" x2="178" y2="150" marker-end="url(#ah)"/>
+        <line class="arrow" x1="200" y1="131" x2="200" y2="153" marker-end="url(#ah)"/>
+        <line class="arrow" x1="214" y1="129" x2="222" y2="150" marker-end="url(#ah)"/>
+        <text class="sm" x="244" y="146">光路（示意）</text>
+        <text class="sm" x="244" y="170">皮下血管</text>
+        <text class="sm" x="200" y="86" text-anchor="middle">主机</text>
+
+        <circle class="key" cx="280" cy="98" r="11"/><text class="m acc b" x="280" y="102.5" text-anchor="middle">1</text>
+        <line class="thin" x1="269" y1="101" x2="236" y2="106"/>
+        <circle class="key" cx="50" cy="195" r="11"/><text class="m acc b" x="50" y="199.5" text-anchor="middle">2</text>
+        <line class="thin" x1="61" y1="195" x2="72" y2="195"/>
+        <circle class="key" cx="334" cy="268" r="11"/><text class="m acc b" x="334" y="272.5" text-anchor="middle">3</text>
+        <line class="thin" x1="326" y1="261" x2="304" y2="250"/>
+      </g>
+    </svg>
+    </div>
+    <figcaption class="tb"><span class="no">FIG.04</span><span class="cap">手腕横截面。光线从主机贴肤面射入，表带的弹性张力把主机压在皮肤上。</span><span class="basis">依据：公开评测 · 横截面示意</span></figcaption>
+  </figure>
+
+  <div class="notes">
+    <div class="note"><h3><span class="k">1</span>主机</h3><p>贴肤面微凸，靠压力保持接触。评测指出，贴合不佳、大量出汗或剧烈乱动时，光学读数会变差。</p></div>
+    <div class="note"><h3><span class="k">2</span>织带</h3><p>弹性织物含 7% 弹性纤维，宽 24 mm，最长 24 cm，用 Fast Link 滑扣调节松紧。佩戴位置经常更换，数据会显得前后不一致。</p></div>
+    <div class="note"><h3><span class="k">3</span>整体</h3><p>26.5 g、无屏幕、无按键、IP68 防水（10 m），夜间不发光也不会被误触，适合 24 小时连续佩戴。</p></div>
+  </div>
+</section>
+
+<!-- ============ 5 BAND ============ -->
+<section>
+  <div class="kick">Band system</div>
+  <h2>表带：品牌身份、档位和换装都落在这里</h2>
+  <p class="lead">主机只有黑色一种，所有可见的个性都来自表带。织带本体、不锈钢件和 Fast Link 滑扣构成了一套可以换色、换质感的系统。</p>
+
+  <figure class="sheet">
+    <div class="scroll">
+    <svg viewBox="0 0 720 340" role="img" aria-label="SuperKnit 表带解剖示意：挂钩、织带本体、Fast Link 滑扣和扣件，以及 52% 聚酰胺、41% 聚酯、7% 弹性纤维的成分比例">
+      <line class="thin" x1="48" y1="90" x2="48" y2="108"/>
+      <line class="thin" x1="672" y1="90" x2="672" y2="108"/>
+      <line class="dim" x1="48" y1="84" x2="672" y2="84" marker-start="url(#dm)" marker-end="url(#dm)"/>
+      <text class="m acc" x="360" y="74" text-anchor="middle">最长 24 cm</text>
+
+      <rect class="part" x="48" y="110" width="624" height="62.4" rx="6"/>
+      <rect x="48" y="110" width="624" height="62.4" rx="6" fill="url(#knit)"/>
+      <rect class="part2" x="34" y="104" width="32" height="74" rx="6"/>
+      <rect class="part2" x="440" y="104" width="40" height="74" rx="6"/>
+      <rect class="part2" x="632" y="104" width="44" height="74" rx="6"/>
+      <circle class="part" style="stroke:var(--accent)" cx="654" cy="124" r="4"/>
+      <circle class="part" style="stroke:var(--accent)" cx="654" cy="158" r="4"/>
+
+      <line class="thin" x1="682" y1="110" x2="704" y2="110"/>
+      <line class="thin" x1="682" y1="172.4" x2="704" y2="172.4"/>
+      <line class="dim" x1="698" y1="110" x2="698" y2="172.4" marker-start="url(#dm)" marker-end="url(#dm)"/>
+      <text class="m acc" x="712" y="141" text-anchor="middle" transform="rotate(-90 712 141)">24 mm</text>
+
+      <line class="thin" x1="50" y1="178" x2="50" y2="208"/>
+      <text class="b" x="34" y="226">挂钩</text>
+      <text class="sm" x="34" y="243">不锈钢</text>
+
+      <line class="thin" x1="240" y1="172" x2="240" y2="208"/>
+      <text class="b" x="240" y="226" text-anchor="middle">织带本体</text>
+      <text class="sm" x="240" y="243" text-anchor="middle">微丝纱线 + 超软内衬</text>
+      <text class="sm" x="240" y="259" text-anchor="middle">15 g · 手洗晾干</text>
+
+      <line class="thin" x1="460" y1="178" x2="460" y2="208"/>
+      <text class="b" x="460" y="226" text-anchor="middle">Fast Link 滑扣</text>
+      <text class="sm" x="460" y="243" text-anchor="middle">无级调节 · 快速换带</text>
+
+      <line class="thin" x1="654" y1="178" x2="654" y2="208"/>
+      <text class="b" x="676" y="226" text-anchor="end">扣件</text>
+      <text class="sm" x="676" y="243" text-anchor="end">不锈钢</text>
+      <text class="sm" x="676" y="259" text-anchor="end">MG 带含 ECG 触点凹槽</text>
+
+      <text class="sm" x="48" y="282">织带成分（按比例示意）</text>
+      <rect class="seg-a" x="48" y="288" width="324.5" height="22"/>
+      <rect class="seg-b" x="372.5" y="288" width="255.8" height="22"/>
+      <rect class="seg-c" x="628.3" y="288" width="43.7" height="22"/>
+      <text class="m" x="60" y="304">聚酰胺 52%</text>
+      <text class="m" x="384.5" y="304">聚酯 41%</text>
+      <text class="m onacc" x="650" y="304" text-anchor="middle">7%</text>
+      <text class="sm" x="672" y="330" text-anchor="end">弹性纤维 7%</text>
+    </svg>
+    </div>
+    <figcaption class="tb"><span class="no">FIG.05</span><span class="cap">一条 SuperKnit 表带由织带、挂钩、滑扣和扣件四部分组成，织带以锦纶为主、含少量弹性纤维。</span><span class="basis">依据：零售页规格 · 部件位置示意</span></figcaption>
+  </figure>
+
+  <div class="notes">
+    <div class="note"><h3>换带靠滑扣</h3><p>零售页把 Fast Link 滑扣列为换带的核心部件，一条带子的成分、宽度和长度全部统一，只有颜色与金属件不同。</p></div>
+    <div class="note"><h3>两档质感</h3><p>标准 SuperKnit 配不锈钢件，Luxe 的金属件为不锈钢镀金 PVD。官方把 Life 附带的表带称为 Titanium SuperKnit Luxe。</p></div>
+    <div class="note"><h3>兼容性断层</h3><p>4.0 的表带和充电器不能用于 5.0 与 MG。5.0 表带可通用于新主机，但 MG 读取 ECG 必须使用带触点凹槽的 MG 版表带。</p></div>
+  </div>
+</section>
+
+<!-- ============ 6 CMF ============ -->
+<section>
+  <div class="kick">CMF</div>
+  <h2>材质与表面：深色硬件，亮点只给金属</h2>
+  <p class="lead">主机与充电包都是低反光的深色，织带提供柔软的肌理，不锈钢扣件是整套产品里唯一的亮面，W 标压在这个亮面上。</p>
+
+  <div class="tbl">
+    <table>
+      <thead><tr><th>部件</th><th>材质与工艺</th><th>设计作用</th></tr></thead>
+      <tbody>
+        <tr><td>主机外壳</td><td>黑色；5.0 未公开具体材质，MG 报道为镁合金机身</td><td>低调的黑块，机身材质成为 Life 档位的差异点</td></tr>
+        <tr><td>织带</td><td>聚酰胺 52% / 聚酯 41% / 弹性纤维 7%，微丝纱线，超软内衬</td><td>柔软、可弹性贴合，承担大部分颜色选择</td></tr>
+        <tr><td>金属件</td><td>不锈钢；Luxe 为不锈钢镀金 PVD</td><td>表带上唯一的亮部，W 标压印其上（官网图观察）</td></tr>
+        <tr><td>充电包</td><td>深色磨砂圆角方体，顶部有细长指示灯槽，W 标居中，编织线缆（官网图观察）</td><td>与主机同一套黑色语言，线缆用织物质感呼应表带</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="swatches" role="list" aria-label="表带配色示意">
+    <div class="sw" role="listitem"><div class="chip" style="background:#121314"></div><b>Jet Black</b><span>CoreKnit</span></div>
+    <div class="sw" role="listitem"><div class="chip" style="background:#25282B"></div><b>Onyx</b><span>SuperKnit</span></div>
+    <div class="sw" role="listitem"><div class="chip" style="background:#4A4E54"></div><b>Graphite</b><span>SuperKnit</span></div>
+    <div class="sw" role="listitem"><div class="chip" style="background:#1B2638"></div><b>Midnight</b><span>SuperKnit</span></div>
+    <div class="sw" role="listitem"><div class="chip" style="background:#CDBFA6"></div><b>Dune</b><span>SuperKnit</span></div>
+    <div class="sw" role="listitem"><div class="chip" style="background:#5A93AA"></div><b>Tide</b><span>SuperKnit</span></div>
+    <div class="sw" role="listitem"><div class="chip" style="background:#E3B3B8"></div><b>Petal</b><span>SuperKnit</span></div>
+    <div class="sw" role="listitem"><div class="chip" style="background:#B6D23E"></div><b>Lime</b><span>SuperKnit</span></div>
+  </div>
+  <p class="fine">色名来自官方与零售页，色块为示意，不是官方色值。</p>
+</section>
+
+<!-- ============ 7 LOGIC ============ -->
+<section>
+  <div class="kick">Trade-off chain</div>
+  <h2>取舍链：去掉屏幕，换来一整套商业逻辑</h2>
+  <p class="lead">取消屏幕不是单点省成本。它先换来续航，续航换来不摘下，连续数据支撑评分体系，最后价值落在 App 和订阅上。</p>
+
+  <figure class="sheet">
+    <div class="scroll">
+    <svg viewBox="0 0 720 310" role="img" aria-label="取舍链：去掉屏幕与按键，换来14天以上续航，使用户全天佩戴，数据不断档，评分体系成立，价值转到订阅">
+      <rect class="part" x="15" y="40" width="150" height="70" rx="10"/>
+      <text class="b" x="90" y="70" text-anchor="middle">去掉屏幕与按键</text>
+      <text class="sm" x="90" y="90" text-anchor="middle">只留传感与震动</text>
+      <line class="arrow" x1="167" y1="75" x2="283" y2="75" marker-end="url(#ah)"/>
+      <text class="sm" x="225" y="64" text-anchor="middle">省下显示功耗</text>
+
+      <rect class="part" x="285" y="40" width="150" height="70" rx="10"/>
+      <text class="b" x="360" y="70" text-anchor="middle">14+ 天续航</text>
+      <text class="sm" x="360" y="90" text-anchor="middle">4.0 约 4–5 天</text>
+      <line class="arrow" x1="437" y1="75" x2="553" y2="75" marker-end="url(#ah)"/>
+      <text class="sm" x="495" y="64" text-anchor="middle">不必每天充电</text>
+
+      <rect class="part" x="555" y="40" width="150" height="70" rx="10"/>
+      <text class="b" x="630" y="70" text-anchor="middle">24 小时不摘</text>
+      <text class="sm" x="630" y="90" text-anchor="middle">含睡眠与训练</text>
+      <line class="arrow" x1="630" y1="112" x2="630" y2="198" marker-end="url(#ah)"/>
+      <text class="sm" x="642" y="160">整夜连续采样</text>
+
+      <rect class="part2" x="555" y="200" width="150" height="70" rx="10"/>
+      <text class="b" x="630" y="230" text-anchor="middle">数据不断档</text>
+      <text class="sm" x="630" y="250" text-anchor="middle">每天一份可比数据</text>
+      <line class="arrow" x1="553" y1="235" x2="437" y2="235" marker-end="url(#ah)"/>
+      <text class="sm" x="495" y="224" text-anchor="middle">每日可比</text>
+
+      <rect class="part2" x="285" y="200" width="150" height="70" rx="10"/>
+      <text class="b" x="360" y="230" text-anchor="middle">评分体系成立</text>
+      <text class="sm" x="360" y="250" text-anchor="middle">恢复 · 睡眠 · 负荷</text>
+      <line class="arrow" x1="283" y1="235" x2="167" y2="235" marker-end="url(#ah)"/>
+      <text class="sm" x="225" y="224" text-anchor="middle">按年订阅</text>
+
+      <rect class="part2" x="15" y="200" width="150" height="70" rx="10"/>
+      <text class="b" x="90" y="230" text-anchor="middle">价值转到订阅</text>
+      <text class="sm" x="90" y="250" text-anchor="middle">硬件随会员发放</text>
+    </svg>
+    </div>
+    <figcaption class="tb"><span class="no">FIG.06</span><span class="cap">这条因果链是分析推导，不是官方表述。</span><span class="basis">依据：官方续航口径 · 媒体报道 · 分析</span></figcaption>
+  </figure>
+  <p class="scope" style="margin-top:12px">续航口径并不统一：官方称 14+ 天，媒体称 4.0 约 4–5 天，另有评测按实际使用估计 5.0 约 5 天。</p>
+</section>
+
+<!-- ============ 8 RANGE ============ -->
+<section>
+  <div class="kick">Product range</div>
+  <h2>型号阶梯：用工业设计拉开三个档位</h2>
+  <p class="lead">三档会员对应三套不同的硬件组合。充电方式、表带质感和机身材质，都被用来表达档位。</p>
+
+  <div class="tbl">
+    <table>
+      <thead><tr><th></th><th>One</th><th>Peak</th><th>Life</th></tr></thead>
+      <tbody>
+        <tr><td>年费</td><td class="num">$199</td><td class="num">$239</td><td class="num">$359</td></tr>
+        <tr><td>主机</td><td>5.0</td><td>5.0</td><td>MG（报道为镁合金机身）</td></tr>
+        <tr><td>充电</td><td>有线基础充电器</td><td>无线充电包</td><td>无线充电包</td></tr>
+        <tr><td>表带</td><td>CoreKnit Jet Black</td><td>SuperKnit Onyx</td><td>SuperKnit Luxe Titanium</td></tr>
+        <tr><td>医疗级功能</td><td>无</td><td>无</td><td>ECG 心脏筛查、血压洞察</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="scope" style="margin-top:10px">价格与配置取自官网会员页，血压洞察在资料中标注为测试版、需袖带校准。</p>
+</section>
+
+<!-- ============ 9 VERDICT ============ -->
+<section>
+  <div class="kick">Verdict</div>
+  <h2>设计评分</h2>
+  <p class="lead">以下为分析判断，不是实测数据，满分 5 分。</p>
+
+  <div class="score">
+    <div class="row"><b>结构取舍</b><span class="dots" role="img" aria-label="5 分，满分 5"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span><p>去屏幕换续航与连续数据，因果链完整，是整套设计最强的一处。</p></div>
+    <div class="row"><b>佩戴与重量</b><span class="dots" role="img" aria-label="4 分，满分 5"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><p>26.5 g、10.6 mm，没有显示面。舒适度依据公开评测，我没有做过实测。</p></div>
+    <div class="row"><b>CMF 层次</b><span class="dots" role="img" aria-label="4 分，满分 5"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><p>织物、不锈钢与深色磨砂的对比清晰，但主机本身是通用的黑色圆角块，质感差异主要靠表带。</p></div>
+    <div class="row"><b>品牌一致性</b><span class="dots" role="img" aria-label="4 分，满分 5"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><p>黑色硬件、W 标和 App 里的绿色视觉连成一套，硬件和界面像同一个品牌。</p></div>
+    <div class="row"><b>主机辨识度</b><span class="dots" role="img" aria-label="3 分，满分 5"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span><p>主机单独放在桌上缺少记忆点，辨识要靠表带与 W 标补上。</p></div>
+    <div class="row"><b>迭代差异感</b><span class="dots" role="img" aria-label="2 分，满分 5"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span><p>相比 4.0 主要是缩小 7%，外观变化小，用户靠规格变化感知升级。</p></div>
+    <div class="row"><b>兼容与延续</b><span class="dots" role="img" aria-label="2 分，满分 5"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span><p>扣具重新设计后，4.0 的表带和充电器全部不能沿用，引发了明显的用户不满。</p></div>
+  </div>
+</section>
+
+<!-- ============ 10 RISK ============ -->
+<section>
+  <div class="kick">Risks</div>
+  <h2>争议与风险</h2>
+  <ul class="list">
+    <li><b>配件断代。</b>新扣具让 4.0 的表带、服饰类配件和充电器无法使用，用户在社区里把它视为被迫换购。</li>
+    <li><b>光学读数受佩戴影响。</b>汗水、剧烈运动和松紧不当都会削弱读数，而主机自身没有任何辅助定位结构。</li>
+    <li><b>完全依赖手机。</b>没有屏幕意味着每次查看和设置都要拿出手机，临时看一眼心率这类场景无法满足。</li>
+    <li><b>差异不易感知。</b>5.0 与 MG 的主机外观几乎相同，医疗级功能的价值要靠表带触点和 App 说明才能被看见。</li>
+  </ul>
+</section>
+
+<!-- ============ 11 TAKEAWAY ============ -->
+<section>
+  <div class="kick">Takeaways</div>
+  <h2>对健康穿戴产品的设计启示</h2>
+  <ul class="list">
+    <li><b>先决定哪些交互可以交给手机。</b>屏幕是续航、体积和佩戴感的最大成本，去掉它之后整套结构都会跟着简化。</li>
+    <li><b>把个性放在可换的部件上。</b>主机保持中性，表带承担颜色、质感和档位，既降低主机的造型风险，也延长配件的商业空间。</li>
+    <li><b>让高阶功能以克制的方式出现。</b>MG 用专用表带触点实现 ECG，没有改动主机外形，用户不会觉得它是另一个产品。</li>
+    <li><b>充电要服务连续佩戴。</b>无线充电包让用户不必摘下设备，数据连续性比一次充电的速度更重要。</li>
+    <li><b>兼容性是工业设计决策。</b>结构改版时先想清楚旧配件怎么办，否则体验升级会被口碑代价抵消。</li>
+  </ul>
+</section>
+
+<footer class="src">
+  <div class="kick">Sources</div>
+  <ul>
+    <li><a href="https://www.whoop.com/us/en/membership/">WHOOP 官网会员页</a></li>
+    <li><a href="https://gadgetsandwearables.com/technical-specs/whoop-band-5-0/">Gadgets &amp; Wearables：WHOOP 5.0 规格</a></li>
+    <li><a href="https://the5krunner.com/2025/06/16/whoop-4-0-vs-whoop-5-0-sensor-architecture-changes-detailed-technical-content/">the5krunner：4.0 与 5.0 传感器架构对比</a></li>
+    <li><a href="https://the5krunner.com/specs/whoop/5-0-mg/">the5krunner：WHOOP 5.0 / MG 规格</a></li>
+    <li><a href="https://electronics360.globalspec.com/article/23159/techinsights-teardown-whoop-5-0">Electronics360：TechInsights 对 WHOOP 5.0 的拆解</a></li>
+    <li><a href="https://plunge.com/blogs/blog/whoop-launches-5-0-and-mg-devices">Plunge：WHOOP 5.0 与 MG 发布与争议</a></li>
+    <li><a href="https://nextpit.com/whoop-mg-first-impressions">NextPit：WHOOP MG 上手印象</a></li>
+    <li><a href="https://connectthewatts.com/2025/05/08/whoop-5-0-and-whoop-mg-redefine-wearable-health-tracking/">Connect the Watts：5.0 与 MG 发布</a></li>
+    <li><a href="https://www.currys.co.uk/products/whoop-superknit-5.0-band-dune-10306235.html">Currys：SuperKnit 5.0 表带规格</a></li>
+    <li><a href="https://www.jib.co.th/web/product/readProduct/84961/BAND--สาย--WHOOP-MG-SUPERKNIT-LUXE-BAND---DUNE-WITE-GOLD">JIB：WHOOP MG SuperKnit Luxe 表带规格</a></li>
+    <li><a href="https://healf.com/products/whoop-superknit-luxe-mg-obsidian">Healf：SuperKnit Luxe MG 表带</a></li>
+    <li><a href="https://geekchamp.com/?p=408079">GeekChamp：WHOOP 5.0 评测</a></li>
+  </ul>
+</footer>
+
+</div>
+
+</body></html>
